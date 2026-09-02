@@ -17,3 +17,18 @@ export type { FormData, FormStage } from "./form.js";
 
 export { extractFromOptionText, extractTeamFromOptionText, extractTaskFromOptionText, extractStructured, resolveAgent, resolveTask, BYPASS_MARKER, MORE_MARKER } from "./extractor.js";
 export { getLastUserMessageText } from "./cleaner.js";
+
+export {
+  classifyClaudeCodeRequest,
+  buildAssetSummaryBlock,
+  buildEvidenceSystemInstruction,
+} from "./evidence-context.js";
+export type {
+  ClaudeEvidenceRequestKind,
+  EvidenceContextInput,
+  AssetInjectionCandidate,
+} from "./evidence-context.js";
+export { parseAssetUsage } from "./usage-claim-parser.js";
+export type { ParsedUsageClaim, ParsedUsageClaims } from "./usage-claim-parser.js";
+export { AnthropicSseEvidenceBuffer, extractToolResults } from "./tool-evidence.js";
+export type { ToolEvidence } from "./tool-evidence.js";

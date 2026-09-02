@@ -94,6 +94,8 @@ export type {
   SkillVersionsRequest,
 } from "./skill-types.js";
 export { MetadataClient, type MetadataClientConfig } from "./metadata-client.js";
+export { EvidenceClient, type EvidenceClientConfig } from "./evidence-client.js";
+export type * from "./evidence-types.js";
 export type {
   UserStatus,
   UserType,

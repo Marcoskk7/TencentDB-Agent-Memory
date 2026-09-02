@@ -26,7 +26,8 @@ export class EvidenceService {
   private async ensureAccess(runId: string, accessId: string) { const a = await this.store.getAccess(accessId); if (!a || a.run_id !== runId) throw new Error("access does not belong to run"); return a; }
 
   async recordAccess(runId: string, input: Omit<AssetAccess, "access_id" | "run_id" | "created_at">): Promise<AssetAccess> {
-    await this.open(runId); checkText("content_digest", input.content_digest, 300); if (!Number.isInteger(input.version) || input.version < 0) throw new Error("invalid version");
+    const run = await this.open(runId); checkText("content_digest", input.content_digest, 300); if (!Number.isInteger(input.version) || input.version < 0) throw new Error("invalid version");
+    if (input.reader_team_id !== run.team_id || input.reader_agent_id !== run.agent_id || input.reader_user_id !== run.user_id) throw new Error("reader does not belong to run");
     const access: AssetAccess = { ...input, access_id: id("acc"), run_id: runId, created_at: isoNow() };
     await this.store.addAccess(access);
     const eventType: EvidenceEventType = input.mode === "inject" ? "asset_injected" : input.mode === "read" ? "asset_read" : "asset_recalled";
@@ -39,6 +40,15 @@ export class EvidenceService {
 
   async appendEvent(runId: string, type: EvidenceEventType, data: Record<string, unknown>, idempotencyKey: string, actor: EvidenceEvent["actor"] = { type: "proxy" }): Promise<EvidenceEvent> {
     const run = await this.run(runId); if (run.status !== "running" && type !== "correction_recorded") throw new Error("run is closed"); checkText("idempotency_key", idempotencyKey, 500);
+    if (!data || typeof data !== "object" || Array.isArray(data) || JSON.stringify(data).length > 100_000) throw new Error("invalid event data");
+    const required = (key: string) => { if (typeof data[key] !== "string" || !(data[key] as string).trim()) throw new Error(`${key} required`); };
+    if (["asset_selected", "asset_injected", "asset_read", "asset_recalled", "agent_declared", "intent_declared"].includes(type)) required("access_id");
+    if (["behavior_observed"].includes(type)) required("behavior_id");
+    if (["diff_recorded"].includes(type)) required("diff_id");
+    if (["validation_recorded"].includes(type)) required("validation_id");
+    if (["review_recorded"].includes(type)) required("review_id");
+    if (["evaluation_recorded"].includes(type)) required("evaluation_id");
+    if (["candidate_generated"].includes(type)) required("candidate_id");
     if (["asset_selected", "asset_injected", "asset_read", "asset_recalled", "agent_declared", "intent_declared", "correction_recorded"].includes(type)) { const accessId = data.access_id; if (typeof accessId !== "string") throw new Error("access_id required"); const access = await this.ensureAccess(runId, accessId); if (data.asset_id !== undefined && data.asset_id !== access.asset_id) throw new Error("asset snapshot mismatch"); if (data.version !== undefined && data.version !== access.version) throw new Error("asset snapshot mismatch"); if (data.content_digest !== undefined && data.content_digest !== access.content_digest) throw new Error("asset snapshot mismatch"); }
     if (type === "correction_recorded" && typeof data.original_event_id !== "string") throw new Error("original_event_id required");
     return this.store.appendEvent({ run_id: runId, type, data, schema_version: 1, actor, occurred_at: typeof data.occurred_at === "string" ? data.occurred_at : isoNow(), idempotency_key: idempotencyKey });
@@ -54,8 +64,13 @@ export class EvidenceService {
 
   async recordBehavior(runId: string, input: Omit<Behavior, "behavior_id" | "run_id" | "created_at">) { await this.open(runId); checkText("tool_name", input.tool_name, 500); const v = { ...input, behavior_id: id("beh"), run_id: runId, created_at: isoNow() }; await this.store.addBehavior(v); await this.appendEvent(runId, "behavior_observed", { behavior_id: v.behavior_id }, `behavior:${v.behavior_id}`); return v; }
   async recordDiff(runId: string, input: Omit<CodeDiff, "diff_id" | "run_id" | "created_at">) { await this.open(runId); checkText("diff_digest", input.diff_digest, 300); const v = { ...input, diff_id: id("diff"), run_id: runId, created_at: isoNow() }; await this.store.addDiff(v); await this.appendEvent(runId, "diff_recorded", { diff_id: v.diff_id }, `diff:${v.diff_id}`); return v; }
-  async recordValidation(runId: string, input: Omit<Validation, "validation_id" | "run_id" | "created_at">) { await this.open(runId); checkText("command", input.command, 4000); const v = { ...input, validation_id: id("val"), run_id: runId, created_at: isoNow() }; await this.store.addValidation(v); await this.appendEvent(runId, "validation_recorded", { validation_id: v.validation_id, passed: v.passed }, `validation:${v.validation_id}`); return v; }
-  async recordReview(runId: string, input: Omit<Review, "review_id" | "run_id" | "created_at">) { await this.open(runId); await this.ensureAccess(runId, input.access_id); checkText("reason", input.reason, 10000); const v = { ...input, review_id: id("review"), run_id: runId, created_at: isoNow() }; await this.store.addReview(v); await this.appendEvent(runId, "review_recorded", { review_id: v.review_id, access_id: v.access_id, decision: v.decision }, `review:${v.review_id}`, { type: "user", id: input.reviewer_user_id }); return v; }
+  async recordValidation(runId: string, input: Omit<Validation, "validation_id" | "run_id" | "created_at">) {
+    await this.open(runId); checkText("command", input.command, 4000);
+    const [claims, behaviors, diffs] = await Promise.all([this.store.listClaims(runId), this.store.listBehaviors(runId), this.store.listDiffs(runId)]);
+    if ((input.claim_refs ?? []).some((r) => !claims.some((x) => x.claim_id === r)) || (input.behavior_refs ?? []).some((r) => !behaviors.some((x) => x.behavior_id === r)) || (input.diff_refs ?? []).some((r) => !diffs.some((x) => x.diff_id === r))) throw new Error("validation reference does not belong to run");
+    const v = { ...input, validation_id: id("val"), run_id: runId, created_at: isoNow() }; await this.store.addValidation(v); await this.appendEvent(runId, "validation_recorded", { validation_id: v.validation_id, passed: v.passed }, `validation:${v.validation_id}`); return v;
+  }
+  async recordReview(runId: string, input: Omit<Review, "review_id" | "run_id" | "created_at">) { await this.open(runId); await this.ensureAccess(runId, input.access_id); checkText("reason", input.reason, 10000); const [behaviors, diffs] = await Promise.all([this.store.listBehaviors(runId), this.store.listDiffs(runId)]); if ((input.behavior_refs ?? []).some((r) => !behaviors.some((x) => x.behavior_id === r)) || (input.diff_refs ?? []).some((r) => !diffs.some((x) => x.diff_id === r))) throw new Error("review reference does not belong to run"); const v = { ...input, review_id: id("review"), run_id: runId, created_at: isoNow() }; await this.store.addReview(v); await this.appendEvent(runId, "review_recorded", { review_id: v.review_id, access_id: v.access_id, decision: v.decision }, `review:${v.review_id}`, { type: "user", id: input.reviewer_user_id }); return v; }
   async recordEvaluation(runId: string, input: Omit<Evaluation, "evaluation_id" | "run_id" | "created_at">) { await this.open(runId); const v = { ...input, evaluation_id: id("eval"), run_id: runId, created_at: isoNow() }; await this.store.addEvaluation(v); await this.appendEvent(runId, "evaluation_recorded", { evaluation_id: v.evaluation_id }, `evaluation:${v.evaluation_id}`); return v; }
   async recordCorrection(runId: string, input: { original_event_id: string; access_id: string; reason: string; actor_id: string }) {
     const events = await this.store.listEvents(runId); if (!events.some(e => e.event_id === input.original_event_id)) throw new Error("original event not found");

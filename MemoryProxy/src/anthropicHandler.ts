@@ -57,6 +57,7 @@ import {
   isRateLimitExceededError,
   recordInputTokenUsage,
 } from "./rate-limit/guard.js";
+import { parseAssetUsage } from "./session/claude-code/usage-claim-parser.js";
 
 const SKIP_REQUEST_HEADERS = new Set([
   "host",
@@ -1561,7 +1562,18 @@ export async function handleAnthropicMessages(
         respText = JSON.stringify(respJson);
         pipe.info("NONSTREAM_THINKING_FIX", "patched thinking block(s) with missing 'thinking' field");
       }
-      outputContent = textParts.join("\n");
+      // `<asset_usage>` is an internal evidence protocol block. Parse it for
+      // internal consumers and keep it out of extraction/telemetry text.
+      const parsedUsage = parseAssetUsage(textParts.join("\n"));
+      outputContent = parsedUsage.text;
+      if (parsedUsage.claims.length > 0) {
+        for (const block of content as Record<string, unknown>[]) {
+          if (block.type === "text" && typeof block.text === "string") {
+            block.text = parseAssetUsage(block.text).text;
+          }
+        }
+        respText = JSON.stringify(respJson);
+      }
       // Preserve full content array (incl. tool_use blocks) for skill trigger.
       assistantMessage = { role: "assistant", content };
 
@@ -2063,6 +2075,12 @@ function consumeAnthropicStream(stream: ReadableStream<Uint8Array>, ctx: Anthrop
           pipe.error("LANGFUSE_SPAN", langfuseErr);
         }
       }
+
+      // Parse the structured claim block once the stream is complete. Claims
+      // are intentionally not treated as proof of usage; the evidence service
+      // still requires behavior/review/validation associations.
+      const parsedUsage = parseAssetUsage(outputText);
+      outputText = parsedUsage.text;
 
       // CC 分流：FORK/SIDEQUERY 不是真实对话轮，跳过 L0/skill。Credit 仍上报。
       const isMainDialog = ctx.requestKind === "main";

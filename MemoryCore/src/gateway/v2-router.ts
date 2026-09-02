@@ -502,20 +502,23 @@ export async function handleV2Route(
     pathname === "/v3/memory-generation-log/list" ||
     pathname === "/v3/memory-generation-log/get"
   );
-  if (method !== "POST" && !isPromptRead) return false;
+  if (method !== "POST" && !isPromptRead && !pathname.startsWith("/v3/evidence/")) return false;
   const isV3 = pathname.startsWith(`${V3_PREFIX}/`);
   const isV2 = pathname.startsWith(`${V2_PREFIX}/`);
   // Management-plane modules are provided by extraRouteTable, not by the
   // built-in V3 data-plane list. They bypass strict L0-L3 isolation because
   // each module validates its own target semantics.
+  // Include the collection endpoint `/v3/evidence/task-runs` (no trailing
+  // slash) as well as nested evidence resources.
+  const isEvidence = pathname === "/v3/evidence" || pathname.startsWith("/v3/evidence/");
   const isV3Extra = !!extraRouteTable && (
     pathname.startsWith("/v3/skill/") ||
     pathname.startsWith("/v3/knowledge/") ||
     pathname.startsWith("/v3/chat-memory/") ||
     pathname.startsWith("/v3/memory-prompt/") ||
-    pathname.startsWith("/v3/memory-generation-log/")
+    pathname.startsWith("/v3/memory-generation-log/") || isEvidence
   );
-  if (!isV2 && !isV3) return false;
+  if (!isV2 && !isV3 && !isEvidence) return false;
 
   // /v3 暴露 L0–L3 数据面 14 条（V3_ALLOWED_SUBPATHS）+ /v3/skill/* + /v3/knowledge/*（extraRouteTable）；
   // 其他 /v3 子路径直接走 404
@@ -525,7 +528,19 @@ export async function handleV2Route(
   }
 
   const handler = routeTable[pathname];
-  const extra = extraRouteTable?.[pathname];
+  let extra = extraRouteTable?.[pathname];
+  if (!extra && isEvidence && extraRouteTable) {
+    const m = pathname.match(/^\/v3\/evidence\/task-runs\/([^/]+)\/(accesses|behaviors|diffs|events|claims|reviews|validations|evaluations|corrections|receipt|close)$/);
+    if (m) {
+      const key = `/v3/evidence/task-runs/${m[2]}`;
+      const target = extraRouteTable[key];
+      if (target) extra = (b, a, r, d) => target({ ...(b && typeof b === "object" ? b as Record<string, unknown> : {}), run_id: decodeURIComponent(m[1]) }, a, r, d);
+    }
+    if (!extra && pathname.match(/^\/v3\/evidence\/task-runs\/[^/]+$/) && method === "GET") {
+      const m2 = pathname.match(/^\/v3\/evidence\/task-runs\/([^/]+)$/); const target = extraRouteTable["/v3/evidence/task-runs/get"];
+      if (target) extra = (b, a, r, d) => target({ ...(b && typeof b === "object" ? b as Record<string, unknown> : {}), run_id: decodeURIComponent(m2![1]) }, a, r, d);
+    }
+  }
   if (!handler && !extra) return false;
 
   const requestId = makeRequestId();
