@@ -35,9 +35,9 @@ data:
 # provider 默认 "openai" 即直连；若要走 context_proxy（统一鉴权/账务/观测），
 # 见 tdai-gateway.proxy.yaml 或 docs/llm-via-proxy.md
 llm:
-  baseUrl: "https://api.lkeap.cloud.tencent.com/v1"
-  apiKey: "${TDAI_LLM_API_KEY}"
-  model: "deepseek-v3.2"
+  baseUrl: "https://api.deepseek.com"
+  apiKey: "sk-9af3067a3e6345049b5c0775b5336923"
+  model: "deepseek-v4-flash"
   maxTokens: 32000
   timeoutMs: 300000
 

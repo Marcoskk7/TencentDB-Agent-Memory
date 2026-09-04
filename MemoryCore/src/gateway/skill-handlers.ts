@@ -56,6 +56,7 @@ import type { CompressibleMessage } from "../core/skill/conversation-add/message
 import { trace } from "../core/report/trace.js";
 import { metricProducer } from "../core/report/kafka-metric-producer.js";
 import { obsLogger } from "../core/report/obs-logger.js";
+import { authenticateV3 } from "../metadata/router/auth.js";
 
 const TAG = "[skill-handlers]";
 
@@ -109,6 +110,8 @@ export interface SkillRouterDeps {
    * 一致（详见 v2-router.ts:648 及 metadata-service.ts:ensureSkillAsset）。
    */
   getMetadataService?: (instanceId: string) => Promise<import("../metadata/service/metadata-service.js").MetadataService>;
+  /** Per-request x-tdai-user-key, copied by the v2 dispatcher. */
+  evidenceUserKey?: string;
   /**
    * `POST /v3/skill/conversation/add` + `POST /v3/skill/extract`
    * 共用的 wired 结果提供者。返回一整套 { handler, trigger, buffer, ... }：
@@ -199,6 +202,7 @@ async function precheck<T>(
   auth: V2AuthContext,
   deps: SkillRouterDeps,
   requestId: string,
+  opts: { requireTeamMember?: boolean } = {},
 ): Promise<{ ok: true; core: SkillCore; data: T } | { ok: false; envelope: ApiResponseEnvelope }> {
   let core: SkillCore | undefined;
   if (deps.resolveSkillCore) {
@@ -210,7 +214,52 @@ async function precheck<T>(
   if (!core) return { ok: false, envelope: errorEnvelope(404, "Skill module not enabled", requestId) };
   const parsed = schema.safeParse(body);
   if (!parsed.success) return { ok: false, envelope: errorEnvelope(40001, formatZodErr(parsed.error), requestId) };
+  if (opts.requireTeamMember) {
+    try {
+      await assertSkillTeamMember(parsed.data, auth, deps);
+    } catch (e) {
+      return { ok: false, envelope: mapCoreError(e, requestId, deps) };
+    }
+  }
   return { ok: true, core, data: parsed.data };
+}
+
+/**
+ * Skill data-plane requests carry a user_id in the JSON body, but that field
+ * is not an authentication credential.  Resolve the caller from the signed
+ * x-tdai-user-key and require active membership in the requested team before
+ * any skill data is read.  Without this check a caller with only the gateway
+ * bearer token could supply another team's team_id and read its skill body.
+ */
+async function assertSkillTeamMember(
+  data: unknown,
+  auth: V2AuthContext,
+  deps: SkillRouterDeps,
+): Promise<void> {
+  const teamId = data && typeof data === "object" && typeof (data as { team_id?: unknown }).team_id === "string"
+    ? (data as { team_id: string }).team_id.trim()
+    : "";
+  if (!teamId) throw new SkillCoreError("SKILL_TEAM_MISMATCH", "team_id is required for skill reads");
+  if (!deps.getMetadataService) {
+    // Direct SkillCore/unit callers do not have an HTTP identity layer. The
+    // production gateway always injects getMetadataService, so keep these
+    // lower-level tests backwards compatible while failing closed in HTTP.
+    return;
+  }
+  const userKey = deps.evidenceUserKey?.trim();
+  if (!userKey) throw new SkillCoreError("SKILL_TEAM_MISMATCH", "missing user identity");
+  const metadata = await deps.getMetadataService(auth.serviceId);
+  const verified = await authenticateV3(userKey, metadata);
+  if (!verified.ok || !verified.ctx?.userId) {
+    throw new SkillCoreError("SKILL_TEAM_MISMATCH", "invalid user identity");
+  }
+  if (verified.ctx.isSystemAdmin) return;
+  const member = await metadata.rawStore.getTeamMember(teamId, verified.ctx.userId);
+  if (!member || member.status !== "active") {
+    // Deliberately use the same externally mapped error as a team mismatch so
+    // callers cannot probe whether a skill exists in another team.
+    throw new SkillCoreError("SKILL_TEAM_MISMATCH", "caller is not an active team member");
+  }
 }
 
 /**
@@ -442,7 +491,7 @@ export async function handleDelete(body: unknown, _auth: V2AuthContext, requestI
  */
 export async function handleGetByName(body: unknown, _auth: V2AuthContext, requestId: string, deps: SkillRouterDeps): Promise<ApiResponseEnvelope> {
   const t0 = Date.now();
-  const pre = await precheck(getByNameRequestSchema, body, _auth, deps, requestId);
+  const pre = await precheck(getByNameRequestSchema, body, _auth, deps, requestId, { requireTeamMember: true });
   if (!pre.ok) { obsLogger.warn("skill.handleGetByName.done", { req_id: requestId, code: pre.envelope.code, dur_ms: Date.now() - t0, reason: "precheck" }); return pre.envelope; }
   try {
     // 用 name 当 prefix 拉 1-2 条候选(prefix LIKE 会命中同前缀的邻居,
@@ -503,7 +552,7 @@ export async function handleGetByName(body: unknown, _auth: V2AuthContext, reque
 
 export async function handleGet(body: unknown, _auth: V2AuthContext, requestId: string, deps: SkillRouterDeps): Promise<ApiResponseEnvelope> {
   const t0 = Date.now();
-  const pre = await precheck(getRequestSchema, body, _auth, deps, requestId);
+  const pre = await precheck(getRequestSchema, body, _auth, deps, requestId, { requireTeamMember: true });
   if (!pre.ok) { obsLogger.warn("skill.handleGet.done", { req_id: requestId, code: pre.envelope.code, dur_ms: Date.now() - t0, reason: "precheck" }); return pre.envelope; }
   try {
     const row = await pre.core.get(pre.data);
@@ -528,7 +577,7 @@ export async function handleGet(body: unknown, _auth: V2AuthContext, requestId: 
 
 export async function handleList(body: unknown, _auth: V2AuthContext, requestId: string, deps: SkillRouterDeps): Promise<ApiResponseEnvelope> {
   const t0 = Date.now();
-  const pre = await precheck(listRequestSchema, body, _auth, deps, requestId);
+  const pre = await precheck(listRequestSchema, body, _auth, deps, requestId, { requireTeamMember: true });
   if (!pre.ok) { obsLogger.warn("skill.handleList.done", { req_id: requestId, code: pre.envelope.code, dur_ms: Date.now() - t0, reason: "precheck" }); return pre.envelope; }
   try {
     // 归档语义说明：`filters.status` 允许显式传 `['archived']` / `['active','archived']`，
@@ -543,7 +592,7 @@ export async function handleList(body: unknown, _auth: V2AuthContext, requestId:
 
 export async function handleSearch(body: unknown, _auth: V2AuthContext, requestId: string, deps: SkillRouterDeps): Promise<ApiResponseEnvelope> {
   const t0 = Date.now();
-  const pre = await precheck(searchRequestSchema, body, _auth, deps, requestId);
+  const pre = await precheck(searchRequestSchema, body, _auth, deps, requestId, { requireTeamMember: true });
   if (!pre.ok) { obsLogger.warn("skill.handleSearch.done", { req_id: requestId, code: pre.envelope.code, dur_ms: Date.now() - t0, reason: "precheck" }); return pre.envelope; }
   try {
     // scope="team" → strip agent_id so store does team-wide search (no owner filter).
@@ -566,7 +615,7 @@ export async function handleSearch(body: unknown, _auth: V2AuthContext, requestI
 
 export async function handleVersions(body: unknown, _auth: V2AuthContext, requestId: string, deps: SkillRouterDeps): Promise<ApiResponseEnvelope> {
   const t0 = Date.now();
-  const pre = await precheck(versionsRequestSchema, body, _auth, deps, requestId);
+  const pre = await precheck(versionsRequestSchema, body, _auth, deps, requestId, { requireTeamMember: true });
   if (!pre.ok) { obsLogger.warn("skill.handleVersions.done", { req_id: requestId, code: pre.envelope.code, dur_ms: Date.now() - t0, reason: "precheck" }); return pre.envelope; }
   try {
     const r = await pre.core.listVersions(pre.data);
@@ -631,7 +680,7 @@ export async function handleFilesRemove(body: unknown, auth: V2AuthContext, requ
 
 export async function handleFilesRead(body: unknown, _auth: V2AuthContext, requestId: string, deps: SkillRouterDeps): Promise<ApiResponseEnvelope> {
   const t0 = Date.now();
-  const pre = await precheck(filesReadRequestSchema, body, _auth, deps, requestId);
+  const pre = await precheck(filesReadRequestSchema, body, _auth, deps, requestId, { requireTeamMember: true });
   if (!pre.ok) { obsLogger.warn("skill.handleFilesRead.done", { req_id: requestId, code: pre.envelope.code, dur_ms: Date.now() - t0, reason: "precheck" }); return pre.envelope; }
   try {
     const r = await pre.core.readFile(pre.data);
@@ -645,7 +694,7 @@ export async function handleFilesRead(body: unknown, _auth: V2AuthContext, reque
 
 export async function handleExport(body: unknown, _auth: V2AuthContext, requestId: string, deps: SkillRouterDeps): Promise<ApiResponseEnvelope> {
   const t0 = Date.now();
-  const pre = await precheck(exportRequestSchema, body, _auth, deps, requestId);
+  const pre = await precheck(exportRequestSchema, body, _auth, deps, requestId, { requireTeamMember: true });
   if (!pre.ok) {
     obsLogger.warn("skill.handleExport.done", {
       req_id: requestId, code: pre.envelope.code, dur_ms: Date.now() - t0, reason: "precheck",
@@ -670,7 +719,7 @@ export async function handleExport(body: unknown, _auth: V2AuthContext, requestI
 
 export async function handleListing(body: unknown, _auth: V2AuthContext, requestId: string, deps: SkillRouterDeps): Promise<ApiResponseEnvelope> {
   const t0 = Date.now();
-  const pre = await precheck(listingRequestSchema, body, _auth, deps, requestId);
+  const pre = await precheck(listingRequestSchema, body, _auth, deps, requestId, { requireTeamMember: true });
   if (!pre.ok) { obsLogger.warn("skill.handleListing.done", { req_id: requestId, code: pre.envelope.code, dur_ms: Date.now() - t0, reason: "precheck" }); return pre.envelope; }
   try {
     const charBudget = pre.data.char_budget ?? 8000;

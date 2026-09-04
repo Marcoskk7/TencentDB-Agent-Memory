@@ -269,6 +269,8 @@ export interface V2RouterDeps {
    * 创建 —— 老部署完全兼容。
    */
   getMetadataService?: (instanceId: string) => Promise<import("../metadata/service/metadata-service.js").MetadataService>;
+  /** User key forwarded only to evidence handlers for v3 identity authorization. */
+  evidenceUserKey?: string;
 
   /**
    * State backend handle, used by /v2/pipeline/status to call listQueuedTasks().
@@ -631,6 +633,7 @@ export async function handleV2Route(
       }
     }
 
+    const evidenceUserKeyRaw = req.headers["x-tdai-user-key"];
     const depsWithIsolation: V2RouterDeps = {
       ...resolvedDeps,
       // /v3 路径强制覆盖 isolationConfig.enforce，确保 handler 内部一致地走严格分支
@@ -642,6 +645,7 @@ export async function handleV2Route(
       // requestIsolationMissing is only set when the caller explicitly needs to reject incomplete
       // isolation (e.g. /v3 strict mode), which is handled separately above via collectV3Missing.
       requestIsolationMissing: undefined,
+      evidenceUserKey: (Array.isArray(evidenceUserKeyRaw) ? evidenceUserKeyRaw[0] : evidenceUserKeyRaw ?? "").trim(),
     };
 
     const handlerStart = Date.now();

@@ -85,8 +85,8 @@ memory:
 # Skill 是额外能力的加入，不影响上面的 Memory 引擎。
 # 启用后 skill 数据存储在 {baseDir}/skills/ 目录下。
 # 也可通过环境变量 TDAI_SKILL_ENABLED=true 启用。
-# skill:
-#   enabled: true
+skill:
+  enabled: true
 #   routing:
 #     mode: "bm25"
 #     searchTopK: 20        # listing 接口最多注入多少条 skill（name+description）

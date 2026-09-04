@@ -13,7 +13,7 @@ export interface TaskRun {
   agent_source: string; session_id: string; request_id: string; execution_id: string;
   task_goal: string; repo?: string; branch?: string; base_commit?: string; head_commit?: string;
   variant?: RunVariant; evaluation_group_id?: string; parent_run_id?: string; run_kind?: RunKind;
-  model_fingerprint?: string; environment_fingerprint?: string; prompt_config_digest?: string;
+  model_fingerprint?: string; environment_fingerprint?: string;
   status: RunStatus; close_reason?: string; last_heartbeat_at?: string; created_at: string;
   closed_at?: string; receipt_revision?: number;
 }
@@ -22,24 +22,24 @@ export type CreateTaskRunInput = Omit<TaskRun, "run_id" | "status" | "created_at
 
 export interface AssetAccess {
   access_id: string; run_id: string; asset_id: string; asset_type: AssetType; version: number;
-  content_digest: string; source_ref?: string; mode: AccessMode; reader_team_id: string;
+  source_ref?: string; mode: AccessMode; reader_team_id: string;
   reader_agent_id: string; reader_user_id: string; adapter?: string; read_at?: string;
   selection_score?: number; selection_reason?: string; token_estimate?: number;
-  compatibility_risk?: string; applicability?: string; name?: string; created_at: string;
+  compatibility_risk?: string; applicability?: string; name?: string; idempotency_key?: string; created_at: string;
 }
 
 export interface AgentUsageClaim {
   claim_id: string; run_id: string; access_id: string; declared_usage: DeclaredUsage; purpose: string;
   decision_refs?: string[]; behavior_refs?: string[]; diff_refs?: string[]; validation_refs?: string[];
-  files?: string[]; reason?: string; created_at: string;
+  files?: string[]; reason?: string; idempotency_key?: string; created_at: string;
 }
 
-export type EvidenceEventType = "task_run_started" | "asset_recalled" | "asset_selected" | "asset_injected" | "asset_read" | "intent_declared" | "agent_declared" | "behavior_observed" | "diff_recorded" | "validation_recorded" | "review_recorded" | "correction_recorded" | "evaluation_recorded" | "candidate_generated" | "task_run_closed";
+export type EvidenceEventType = "task_run_started" | "asset_recalled" | "asset_selected" | "asset_injected" | "asset_read" | "intent_declared" | "agent_declared" | "behavior_observed" | "diff_recorded" | "diff_unavailable" | "validation_recorded" | "review_recorded" | "correction_recorded" | "evaluation_recorded" | "candidate_generated" | "candidate_reviewed" | "task_close_prompted" | "task_close_decision" | "task_run_closed";
 export interface EvidenceEvent { event_id: string; run_id: string; sequence: number; type: EvidenceEventType; data: Record<string, unknown>; schema_version: number; actor?: { type: "proxy" | "agent" | "user" | "system"; id?: string }; occurred_at: string; received_at: string; idempotency_key: string; }
 
-export interface Behavior { behavior_id: string; run_id: string; tool_name: string; target_files?: string[]; command_summary?: string; result_summary?: string; digest?: string; created_at: string; }
-export interface CodeDiff { diff_id: string; run_id: string; base_commit?: string; head_commit?: string; files: string[]; additions?: number; deletions?: number; diff_digest: string; created_at: string; }
-export interface Validation { validation_id: string; run_id: string; command: string; exit_code?: number; passed: boolean; validation_type: string; claim_refs?: string[]; behavior_refs?: string[]; diff_refs?: string[]; verifier?: string; created_at: string; }
+export interface Behavior { behavior_id: string; run_id: string; tool_name: string; target_files?: string[]; command_summary?: string; result_summary?: string; external_tool_use_id?: string; phase?: "intent" | "execution"; parent_behavior_id?: string; idempotency_key?: string; created_at: string; }
+export interface CodeDiff { diff_id: string; run_id: string; base_commit?: string; head_commit?: string; files: string[]; additions?: number; deletions?: number; idempotency_key?: string; created_at: string; }
+export interface Validation { validation_id: string; run_id: string; command: string; exit_code?: number; passed: boolean; validation_type: string; claim_refs?: string[]; behavior_refs?: string[]; diff_refs?: string[]; verifier?: string; idempotency_key?: string; created_at: string; }
 export interface Review { review_id: string; run_id: string; access_id: string; decision: ReviewDecision; reason: string; behavior_refs?: string[]; diff_refs?: string[]; decision_refs?: string[]; reviewer_user_id: string; created_at: string; }
 export interface Evaluation { evaluation_id: string; run_id: string; control_run_id?: string; baseline_commit?: string; environment_fingerprint?: string; passed?: boolean; gain?: number; contamination?: boolean; independent_causal_evidence?: boolean; metrics?: Record<string, number>; created_at: string; }
 export interface CandidateAsset { candidate_id: string; source_run_id: string; source_diff_ids: string[]; source_validation_ids: string[]; proposed_kind: string; content: string; confidence: number; review_required: true; status: "candidate" | "rejected" | "approved"; created_at: string; }

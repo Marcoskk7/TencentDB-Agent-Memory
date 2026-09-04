@@ -23,7 +23,7 @@ const run = await post("/v3/evidence/task-runs", {
 });
 const access = await post(`/v3/evidence/task-runs/${run.run_id}/accesses`, {
   asset_id: "skill_retry", asset_type: "skill", version: 3,
-  content_digest: "sha256:demo", mode: "inject",
+  mode: "inject",
   reader_team_id: run.team_id, reader_agent_id: run.agent_id, reader_user_id: run.user_id,
   name: "API retry skill", applicability: "HTTP retry/backoff",
 });

@@ -26,6 +26,13 @@ const taskSourceType = z.enum(["manual", "tapd", "github", "other"]);
 const nonEmpty = z.string().min(1);
 const idList = z.array(nonEmpty).min(1);
 
+/**
+ * username（用户创建接口专用）：先 trim 再判非空，输出 trim 后的用户名。
+ * 拒绝缺失、非字符串（不做类型强制转换）与纯空白（空格 / Tab / 换行 / 全角空格）；
+ * 保留大小写、中文与内部空格。userCreateSchema 与 userCreateWithKeySchema 共用。
+ */
+const username = z.string().trim().min(1);
+
 /** user_id 与 user_key 二选一（兼容旧调用方仅传 user_id）。 */
 const userIdOrKeyFields = z.object({
   user_id: z.string().min(1).optional(),
@@ -38,7 +45,7 @@ export const userIdOrKeySchema = userIdOrKeyFields.refine(requireUserIdOrKey, us
 
 // ── User（v3.1）──
 export const userCreateSchema = z.object({
-  username: nonEmpty,
+  username,
   // 可选：管控/内部侧建"服务账号"时指定确定性 user_id（如 knowledge-service），
   // 便于 proxy systemUsers 白名单按稳定 user_id 命中；不传则内核随机生成 usr-xxx。
   // 仅 system_admin 可调用本接口（见 v3-meta-router assertCanManageUsers）。
@@ -49,7 +56,7 @@ export const userCreateSchema = z.object({
 // user_id 不接受入参（zod 默认 strip），由内核生成后返回；user_key 格式由调用方负责，
 // 内核只做非空校验 + DB 层 UNIQUE 兜底（重复抛 duplicate_user_key）。
 export const userCreateWithKeySchema = z.object({
-  username: nonEmpty,
+  username,
   user_key: nonEmpty,
 });
 export const initAdminSchema = z.object({
