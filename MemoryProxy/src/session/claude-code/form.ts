@@ -29,6 +29,10 @@ export const MORE_LABEL = "更多 →";
 export const ASSET_CONFIRM_YES = "是，关联团队资产";
 export const ASSET_CONFIRM_NO = "否，本次不关联";
 export const ASSET_CONFIRM_FORM_TITLE = "会话初始化 — 是否关联团队资产";
+export const TASK_CLOSE_FORM_TITLE = "任务完成确认";
+export const TASK_CLOSE_COMPLETE = "完成并生成回执";
+export const TASK_CLOSE_CONTINUE = "继续任务";
+export const TASK_CLOSE_CANCEL = "结束对话但不生成回执";
 
 /**
  * 附在每步 question 文末的通用备注：告诉用户"选择跳过 = 本次 session init 跳过、不注入任何团队资产"。
@@ -58,7 +62,7 @@ export function isSessionInitToolCallId(id: string): boolean {
 
 // ── Form Data ──────────────────────────────────────────────────────────────────
 
-export type FormStage = "asset_confirm" | "team" | "agent_select" | "agent_task" | "task_select";
+export type FormStage = "asset_confirm" | "team" | "agent_select" | "agent_task" | "task_select" | "task_close";
 
 export interface FormData {
   teams: TeamOption[];
@@ -92,6 +96,20 @@ function buildAskUserQuestionArgs(data: FormData): { questions: CCAskQuestion[] 
       options: [
         { label: ASSET_CONFIRM_YES, description: "选择 Team / Agent / Task，注入团队上下文" },
         { label: ASSET_CONFIRM_NO, description: "本次不注入任何内容，直接放行" },
+      ],
+      multiSelect: false,
+    });
+    return { questions };
+  }
+
+  if (stage === "task_close") {
+    questions.push({
+      question: "当前任务看起来已经完成，是否结束本次任务并生成资产使用回执？",
+      header: "任务完成",
+      options: [
+        { label: TASK_CLOSE_COMPLETE, description: "采集 diff、测试结果并生成 Evidence receipt" },
+        { label: TASK_CLOSE_CONTINUE, description: "继续当前任务，不关闭 TaskRun" },
+        { label: TASK_CLOSE_CANCEL, description: "结束对话，但不生成完成回执" },
       ],
       multiSelect: false,
     });

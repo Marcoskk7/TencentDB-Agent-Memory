@@ -698,6 +698,18 @@ memCommand:
 ccRequestRouting:
   enabled: true                    # 默认开启。关闭时所有请求强制 main，title-gen 并发会撞 session-init state 导致 bypass。
 
+# ── Core evidence bridge (explicit opt-in) ──────────────────────────────────
+# The optional assetIds list narrows Core-discovered, ACL-filtered assets. The proxy creates
+# runs only after real session/auth identity is available, never closes them;
+# a workspace hook or explicit close endpoint owns final close/diff capture.
+evidence:
+  enabled: false
+  endpoint: "http://127.0.0.1:8420"
+  apiKey: "${TDAI_EVIDENCE_API_KEY:-}"
+  serviceId: "context-proxy"
+  timeoutMs: 3000
+  assetIds: []
+
 
 # ── Per-Agent 上游路由 ─────────────────────────────────────────────────────
 # 见文件顶部 `upstream.agents` 一段。

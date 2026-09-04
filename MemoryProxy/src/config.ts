@@ -144,6 +144,7 @@ export const DEFAULT_CONFIG: ProxyConfig = {
   systemUsers: [],
   admin: { apiKey: "" },
   memCommand: { enabled: false, allowedCommands: [] },
+  evidence: { enabled: false, endpoint: "", apiKey: "", serviceId: "", timeoutMs: 3000, assetIds: [] },
   ccRequestRouting: { enabled: true },
   workbuddyRequestRouting: { enabled: true },
 };
@@ -524,6 +525,16 @@ export function buildConfig(overrides: CliOverrides = {}): ProxyConfig {
             },
           }
         : {}),
+    },
+    evidence: {
+      enabled: yaml.evidence?.enabled ?? DEFAULT_CONFIG.evidence.enabled,
+      endpoint: String(yaml.evidence?.endpoint ?? DEFAULT_CONFIG.evidence.endpoint),
+      apiKey: (process.env.TDAI_EVIDENCE_API_KEY ?? String(yaml.evidence?.apiKey ?? DEFAULT_CONFIG.evidence.apiKey)).trim(),
+      serviceId: String(yaml.evidence?.serviceId ?? DEFAULT_CONFIG.evidence.serviceId),
+      timeoutMs: typeof yaml.evidence?.timeoutMs === "number" ? yaml.evidence.timeoutMs : DEFAULT_CONFIG.evidence.timeoutMs,
+      assetIds: Array.isArray(yaml.evidence?.assetIds)
+        ? yaml.evidence.assetIds.filter((assetId): assetId is string => typeof assetId === "string" && assetId.trim().length > 0)
+        : [],
     },
     ccRequestRouting: {
       enabled:

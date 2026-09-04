@@ -12,7 +12,7 @@ export { handleSessionInit } from "./init.js";
 export type { SessionRequestContext, SessionInitResult } from "./init.js";
 
 export { buildFormResponse, containsFormTitle, isSessionInitToolCallId } from "./form.js";
-export { TOOL_NAME, TOOLCALL_PREFIX, SKIP_LABEL, MORE_LABEL, TEAM_FORM_TITLE, AGENT_TASK_FORM_TITLE, RETRY_FORM_TITLE } from "./form.js";
+export { TOOL_NAME, TOOLCALL_PREFIX, SKIP_LABEL, MORE_LABEL, TEAM_FORM_TITLE, AGENT_TASK_FORM_TITLE, RETRY_FORM_TITLE, TASK_CLOSE_FORM_TITLE, TASK_CLOSE_COMPLETE, TASK_CLOSE_CONTINUE, TASK_CLOSE_CANCEL } from "./form.js";
 export type { FormData, FormStage } from "./form.js";
 
 export { extractFromOptionText, extractTeamFromOptionText, extractTaskFromOptionText, extractStructured, resolveAgent, resolveTask, BYPASS_MARKER, MORE_MARKER } from "./extractor.js";

@@ -13,13 +13,24 @@
  */
 
 import type { SessionInitData, TeamOption } from "../types.js";
-import { SKIP_LABEL, MORE_LABEL, ASSET_CONFIRM_YES, ASSET_CONFIRM_NO } from "./form.js";
+import { SKIP_LABEL, MORE_LABEL, ASSET_CONFIRM_YES, ASSET_CONFIRM_NO, TASK_CLOSE_COMPLETE, TASK_CLOSE_CONTINUE, TASK_CLOSE_CANCEL } from "./form.js";
 
 // ── Markers ────────────────────────────────────────────────────────────────────
 
 const SKIP_RE = /跳过|不关联|skip/i;
 export const BYPASS_MARKER = "__bypass__" as const;
 export const MORE_MARKER = "__more__" as const;
+export type TaskCloseDecision = "complete" | "continue" | "cancel";
+
+/** Parse the answer of the one-shot task-close AskUserQuestion form. */
+export function extractTaskCloseDecision(content: string): TaskCloseDecision | null {
+  const answer = extractAnswerFromJson(content);
+  if (!answer) return null;
+  if (answer.includes(TASK_CLOSE_COMPLETE)) return "complete";
+  if (answer.includes(TASK_CLOSE_CONTINUE)) return "continue";
+  if (answer.includes(TASK_CLOSE_CANCEL)) return "cancel";
+  return null;
+}
 
 /**
  * 从用户答复中提取 asset_confirm 选择。

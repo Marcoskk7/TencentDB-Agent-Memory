@@ -511,6 +511,8 @@ export interface ProxyConfig {
    * allowedCommands 为命令白名单，空数组表示全部允许。
    */
   memCommand: MemCommandConfig;
+  /** Optional, explicit bridge from Claude Code traffic to Core evidence APIs. */
+  evidence: EvidenceProxyConfig;
 
   /**
    * CC 请求分流总开关。
@@ -538,6 +540,16 @@ export interface ProxyConfig {
    *   分流已在生产跑通并有日志验证，此开关是"保守回滚"保险而非"灰度上线"开关。
    */
   workbuddyRequestRouting: WorkbuddyRequestRoutingConfig;
+}
+
+export interface EvidenceProxyConfig {
+  enabled: boolean;
+  endpoint: string;
+  apiKey: string;
+  serviceId: string;
+  timeoutMs: number;
+  /** Optional allow-list; metadata/content still comes from Core after ACL checks. */
+  assetIds: string[];
 }
 
 export interface CcRequestRoutingConfig {
@@ -891,6 +903,14 @@ export interface RawYamlConfig {
       apiKey?: unknown;
       timeoutMs?: unknown;
     };
+  };
+  evidence?: {
+    enabled?: boolean;
+    endpoint?: string;
+    apiKey?: string;
+    serviceId?: string;
+    timeoutMs?: number;
+    assetIds?: unknown[];
   };
 }
 

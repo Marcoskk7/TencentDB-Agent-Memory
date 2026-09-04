@@ -58,6 +58,10 @@ import {
   recordInputTokenUsage,
 } from "./rate-limit/guard.js";
 import { parseAssetUsage } from "./session/claude-code/usage-claim-parser.js";
+import { appendEvidenceEvent, ensureEvidenceRun, evidenceRunId, injectApprovedSkillSnapshots, recordEvidenceResponse, recordEvidenceToolResults, type EvidenceRunContext } from "./session/claude-code/evidence-runtime.js";
+import { createSseAssetUsageFilterStream } from "./session/claude-code/evidence-stream-filter.js";
+import { createSseTaskCloseHookStream } from "./session/claude-code/task-close-hook.js";
+import { classifyClaudeCodeRequest } from "./session/claude-code/evidence-context.js";
 
 const SKIP_REQUEST_HEADERS = new Set([
   "host",
@@ -1152,6 +1156,23 @@ export async function handleAnthropicMessages(
         userKey: callerUserKey,
       });
   const tdaiUserMessage = extractLatestUserMessage(messages);
+  // Evidence is a separate, explicit opt-in path. It requires the same fully
+  // qualified identity as TDAI; headers/defaults never manufacture one.
+  let evidenceContext: EvidenceRunContext | null = null;
+  try {
+    // Evidence adapter is Claude Code-specific. Its classifier has explicit
+    // compact/title/session-init guards independent of legacy request routing.
+    const evidenceRequestKind = agentSource === "claude-code"
+      ? classifyClaudeCodeRequest({ path: c.req.path, headers: lcHeaders, body })
+      : "auxiliary";
+    evidenceContext = await ensureEvidenceRun({
+      config, identity: tdaiIdentity, requestKind: evidenceRequestKind, taskGoal: tdaiUserMessage?.content ?? "",
+      agentSource, serviceId: spaceId, requestId: traceId, userKey: callerUserKey,
+    });
+    await recordEvidenceToolResults(config, evidenceContext, spaceId, callerUserKey, messages);
+  } catch (err) {
+    console.warn("[evidence] unable to initialize/record request:", err instanceof Error ? err.message : String(err));
+  }
 
   // ── Context injection (before cost guard) ────────────────────────────────
   // CC 分流：
@@ -1190,6 +1211,21 @@ export async function handleAnthropicMessages(
     }
   } else if (skipInjection) {
     console.log(`[injection-debug] skipping injection for kind=sidequery session=${sessionKey}`);
+  }
+
+  // Evidence skill snapshots are read from Core only after the fixed-binding
+  // ACL check. They are separate from existing injection cache contents so
+  // each summary has a Core-issued access_id/version/digest evidence record.
+  if (evidenceContext) {
+    try {
+      const evidenceSystem = await injectApprovedSkillSnapshots(config, evidenceContext, tdaiIdentity, spaceId, callerUserKey);
+      if (evidenceSystem) {
+        const { appendBlockToAnthropicSystem } = await import("./session/context-injector.js");
+        body = { ...body, system: appendBlockToAnthropicSystem(body.system, evidenceSystem) };
+      }
+    } catch (err) {
+      console.warn("[evidence] approved skill snapshot injection failed:", err instanceof Error ? err.message : String(err));
+    }
   }
 
   // ── Cost guard: resolve forward target (opaque — no routing logic here) ──
@@ -1426,6 +1462,8 @@ export async function handleAnthropicMessages(
       respHeaders.set(k, v);
     }
   }
+  const runId = evidenceRunId(evidenceContext);
+  if (runId) respHeaders.set("x-evidence-run-id", runId);
 
   // Upstream request id from response header (tokenhub / Anthropic set
   // `x-request-id`). Used for cross-system tracing/audit.
@@ -1519,9 +1557,33 @@ export async function handleAnthropicMessages(
       langfuseDebug,
       debugMetadata,
       preparedStats,
+      evidenceContext,
+      evidenceUserKey: callerUserKey,
     });
 
-    const clientStream = rawClientStream.pipeThrough(createSseThinkingFixStream(pipe));
+    // Only opted-in evidence runs interpret the hidden protocol; other
+    // responses retain the incumbent streaming behavior.
+    const fixedClientStream = rawClientStream.pipeThrough(createSseThinkingFixStream(pipe));
+    const closeHookedStream = evidenceContext
+      ? fixedClientStream.pipeThrough(createSseTaskCloseHookStream({
+          state: {
+            get prompted() { return evidenceContext!.closePrompted === true; },
+            set prompted(value: boolean) { evidenceContext!.closePrompted = value; },
+            get pending() { return evidenceContext!.closePending === true; },
+            set pending(value: boolean) { evidenceContext!.closePending = value; },
+          },
+          enabled: requestKind === "main",
+          hasEvidenceActivity: () => evidenceContext!.behaviorIds.size > 0,
+          model: effectiveModel,
+          onPrompted: () => {
+            void appendEvidenceEvent(config, evidenceContext, spaceId, "task_close_prompted", { reason: "completion_candidate_detected" }, `task-close-prompted:${evidenceContext!.runId}`, callerUserKey)
+              .catch((err) => console.warn("[evidence] task-close prompt event failed:", err instanceof Error ? err.message : String(err)));
+          },
+        }))
+      : fixedClientStream;
+    const clientStream = evidenceContext
+      ? closeHookedStream.pipeThrough(createSseAssetUsageFilterStream())
+      : closeHookedStream;
 
     return new Response(clientStream, { status: upstreamResp.status, headers: respHeaders });
   }
@@ -1566,6 +1628,10 @@ export async function handleAnthropicMessages(
       // internal consumers and keep it out of extraction/telemetry text.
       const parsedUsage = parseAssetUsage(textParts.join("\n"));
       outputContent = parsedUsage.text;
+      await recordEvidenceResponse(config, evidenceContext, spaceId, callerUserKey,
+        (content as Record<string, unknown>[]).filter((b) => b?.type === "tool_use").map((b) => ({ tool_use_id: String(b.id ?? ""), tool_name: String(b.name ?? ""), input_json: typeof b.input === "string" ? b.input : JSON.stringify(b.input ?? {}) })).filter((tool) => tool.tool_use_id && tool.tool_name),
+        parsedUsage.claims,
+      ).catch((err: unknown) => console.warn("[evidence] non-stream response write failed:", err instanceof Error ? err.message : String(err)));
       if (parsedUsage.claims.length > 0) {
         for (const block of content as Record<string, unknown>[]) {
           if (block.type === "text" && typeof block.text === "string") {
@@ -1900,6 +1966,54 @@ function createSseThinkingFixStream(
   });
 }
 
+/** Remove a cross-chunk <asset_usage> block without dropping ordinary text. */
+function createLegacySseAssetUsageFilterStream(): TransformStream<Uint8Array, Uint8Array> {
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  let buffered = "";
+  return new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      const text = decoder.decode(chunk, { stream: true });
+      // Inspect decoded SSE deltas, not network chunks: `<asset_usage>` can
+      // split at arbitrary UTF-8/network boundaries. Holding this response is
+      // conservative but guarantees the hidden protocol can never leak.
+      buffered += text;
+    },
+    flush(controller) {
+      buffered += decoder.decode();
+      if (!buffered) return;
+      if (!buffered.includes("<asset_usage")) { controller.enqueue(encoder.encode(buffered)); return; }
+      const frames = buffered.split(/(\r?\n\r?\n)/);
+      const textEvents: Array<{ frameIndex: number; event: Record<string, unknown>; lines: string[] }> = [];
+      let completeText = "";
+      for (let i = 0; i < frames.length; i += 2) {
+        const lines = frames[i]!.split(/\r?\n/);
+        const dataIndex = lines.findIndex((line) => line.startsWith("data:"));
+        if (dataIndex < 0) continue;
+        try {
+          const event = JSON.parse(lines[dataIndex]!.slice(5).trim()) as Record<string, unknown>;
+          const delta = event.delta as Record<string, unknown> | undefined;
+          if (event.type === "content_block_delta" && delta?.type === "text_delta" && typeof delta.text === "string") {
+            completeText += delta.text;
+            textEvents.push({ frameIndex: i, event, lines });
+          }
+        } catch { /* preserve malformed upstream frames */ }
+      }
+      const parsed = parseAssetUsage(completeText);
+      if (parsed.text === completeText) { controller.enqueue(encoder.encode(buffered)); return; }
+      for (let index = 0; index < textEvents.length; index++) {
+        const item = textEvents[index]!;
+        const delta = item.event.delta as Record<string, unknown>;
+        delta.text = index === 0 ? parsed.text : "";
+        const dataIndex = item.lines.findIndex((line) => line.startsWith("data:"));
+        item.lines[dataIndex] = `data: ${JSON.stringify(item.event)}`;
+        frames[item.frameIndex] = item.lines.join("\n");
+      }
+      controller.enqueue(encoder.encode(frames.join("")));
+    },
+  });
+}
+
 // ── Stream processing helpers ────────────────────────────────────────────────
 
 interface AnthropicTapContext {
@@ -1944,6 +2058,9 @@ interface AnthropicTapContext {
   debugMetadata: Record<string, unknown>;
   /** Opaque counters from the request-preparation stage; null when it didn't run. */
   preparedStats: Record<string, unknown> | null;
+  /** Optional Core evidence run; lifecycle is deliberately owned outside SSE. */
+  evidenceContext: EvidenceRunContext | null;
+  evidenceUserKey: string | null;
 }
 
 /**
@@ -2081,6 +2198,10 @@ function consumeAnthropicStream(stream: ReadableStream<Uint8Array>, ctx: Anthrop
       // still requires behavior/review/validation associations.
       const parsedUsage = parseAssetUsage(outputText);
       outputText = parsedUsage.text;
+      trackWrite(recordEvidenceResponse(ctx.config, ctx.evidenceContext, ctx.spaceId, ctx.evidenceUserKey,
+        Array.from(toolUseAcc.values()).filter((tool) => tool.id && tool.name).map((tool) => ({ tool_use_id: tool.id, tool_name: tool.name, input_json: tool.inputJson })),
+        parsedUsage.claims,
+      ).catch((err: unknown) => pipe.error("EVIDENCE_STREAM", err)));
 
       // CC 分流：FORK/SIDEQUERY 不是真实对话轮，跳过 L0/skill。Credit 仍上报。
       const isMainDialog = ctx.requestKind === "main";
