@@ -23,6 +23,7 @@ const PATH_TO_PAGE: Record<string, PageId> = {
   '/code': 'code',
   '/skills': 'skills',
   '/memory': 'chat_memory',
+  '/evidence': 'evidence',
   '/team/members': 'team_members',
   '/team/agents': 'team_agents',
   '/team/api-keys': 'api_keys',
@@ -81,6 +82,13 @@ export function ConsoleLayout() {
   }, [activePage, isGuide]);
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [narrowViewport, setNarrowViewport] = useState(() => window.matchMedia('(max-width: 640px)').matches);
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 640px)');
+    const onChange = () => setNarrowViewport(query.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
 
   // 首次使用引导：登录后按「每用户仅首次」判定自动弹出
   const currentUserId = auth?.user_id;
@@ -170,7 +178,7 @@ export function ConsoleLayout() {
   };
 
   return (
-    <div className="_memory-app-shell">
+    <div className={`_memory-app-shell${activePage === 'evidence' ? ' _memory-app-shell--evidence' : ''}`}>
       <OnboardingGuide
         visible={onboardingVisible}
         userId={currentUserId}
@@ -189,7 +197,7 @@ export function ConsoleLayout() {
         <Body>
           <Sider>
             {/* 品牌已在全局 Header 展示，侧栏只承载导航（与 Memory项目公共壳层一致）。 */}
-            <Menu collapsable collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed}>
+            <Menu collapsable collapsed={sidebarCollapsed || (activePage === 'evidence' && narrowViewport)} onCollapsedChange={setSidebarCollapsed}>
               {pinnedGroup?.items.map((item) => renderMenuItem(item))}
               {restGroups.map((group) => (
                 <Menu.Group key={group.title} title={group.title}>
@@ -219,4 +227,3 @@ export function ConsoleLayout() {
     </div>
   );
 }
- 

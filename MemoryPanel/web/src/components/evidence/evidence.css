@@ -1,0 +1,269 @@
+/* Local extension: inherit the console's Tea palette, typography and controls. */
+._evidence-workspace,
+._evidence-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+._evidence-toolbar,
+._evidence-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+._evidence-toolbar {
+  justify-content: space-between;
+}
+._evidence-toolbar > :first-child {
+  min-width: 0;
+}
+._evidence-run-list,
+._evidence-timeline {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+._evidence-run-row {
+  display: flex;
+  width: 100%;
+  gap: 24px;
+  justify-content: space-between;
+  align-items: center;
+  text-align: left;
+  padding: 16px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--foreground);
+  cursor: pointer;
+}
+._evidence-run-row:hover {
+  background: var(--accent-hover);
+}
+._evidence-run-main,
+._evidence-run-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+._evidence-run-main {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+._evidence-run-meta {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-align: right;
+}
+._evidence-workspace code,
+._evidence-detail code {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+._evidence-section {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+._evidence-section h3,
+._evidence-section h4 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+}
+._evidence-detail h2 {
+  font-size: 18px;
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+._evidence-detail p {
+  margin: 8px 0;
+  max-width: 75ch;
+  overflow-wrap: anywhere;
+}
+._evidence-facts {
+  display: grid;
+  grid-template-columns: minmax(100px, 140px) minmax(0, 1fr);
+  gap: 6px 16px;
+  margin: 12px 0;
+}
+._evidence-facts dt {
+  color: var(--muted-foreground);
+}
+._evidence-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+._evidence-states {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px 16px;
+  padding: 8px 0;
+}
+._evidence-state {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+._evidence-state[data-active='true'] {
+  color: var(--foreground);
+  font-weight: 600;
+}
+._evidence-state[data-active='true']::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  vertical-align: middle;
+  border-radius: 50%;
+  background: var(--primary);
+}
+._evidence-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 500;
+  min-width: 0;
+}
+._evidence-field input,
+._evidence-field select,
+._evidence-field textarea {
+  border: 1px solid var(--input);
+  background: var(--input-background);
+  color: var(--foreground);
+  padding: 8px;
+  font: inherit;
+  font-weight: 400;
+  max-width: 100%;
+  border-radius: 3px;
+}
+._evidence-field textarea {
+  width: 100%;
+  resize: vertical;
+}
+._evidence-review-form {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+  max-width: 75ch;
+}
+._evidence-review-form fieldset {
+  border: 1px solid var(--border);
+  padding: 12px;
+  min-width: 0;
+}
+._evidence-review-form legend {
+  padding: 0 4px;
+}
+._evidence-check {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 0;
+  overflow-wrap: anywhere;
+}
+._evidence-note {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+._evidence-pre {
+  background: var(--secondary);
+  color: var(--foreground);
+  padding: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 12px/1.6 var(--font-mono);
+  max-height: 360px;
+  overflow: auto;
+}
+._evidence-detail details {
+  margin: 12px 0;
+}
+._evidence-detail summary {
+  cursor: pointer;
+  padding: 6px 0;
+  font-weight: 500;
+}
+._evidence-timeline > li {
+  border-bottom: 1px solid var(--border);
+  padding: 12px 0;
+}
+._evidence-table-scroll {
+  overflow-x: auto;
+}
+._evidence-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+._evidence-table th,
+._evidence-table td {
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+  padding: 10px;
+  min-width: 120px;
+  overflow-wrap: anywhere;
+  max-width: 300px;
+}
+._evidence-table th {
+  font-weight: 600;
+}
+._evidence-table td {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+._evidence-run-row:focus-visible,
+._evidence-detail summary:focus-visible,
+._evidence-field :is(input, select, textarea):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+._evidence-workspace ::selection,
+._evidence-detail ::selection {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+@media (max-width: 640px) {
+  /* Scope shell changes to the new Evidence route; other console pages inherit their existing layout. */
+  ._memory-app-shell--evidence ._memory-global-header {
+    height: auto;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+  ._memory-app-shell--evidence ._memory-global-header-left,
+  ._memory-app-shell--evidence ._memory-global-header-right {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  ._memory-app-shell--evidence ._memory-content-body {
+    padding: 12px;
+  }
+  ._evidence-run-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+  ._evidence-run-meta {
+    text-align: left;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  ._evidence-facts {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  ._evidence-facts dd {
+    margin-bottom: 8px;
+  }
+  ._evidence-toolbar {
+    align-items: flex-start;
+  }
+}

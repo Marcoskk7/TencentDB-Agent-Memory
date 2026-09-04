@@ -100,6 +100,7 @@
 | POST | `/api/v1/chat-memory/layer-update` | 分层编辑（L1/L2/L3） |
 | POST | `/api/v1/chat-memory/search` | 分层关键词检索（L0/L1） |
 | POST | `/api/v1/task/list-with-agents` | Task 列表聚合（含 linked agents） |
+| POST | `/api/v1/evidence/runs/*` | Evidence TaskRun 查询与人工审核（6 个，见 §3.13） |
 | POST | `/api/v1/agent-overview/bootstrap` | Agent 概览引导数据聚合 |
 | POST | `/api/v1/agent/delete-cascade` | 删除 Agent（级联清 skill 后 archive） |
 | POST | `/api/v1/knowledge/wiki/*` | Wiki 知识库业务路由（14 个，见 §3.8） |
@@ -1220,6 +1221,24 @@ KS → Panel 的 S2S 状态回调（ingest/sync 完成或进度更新）。**无
 **错误**：`MISSING_TEAM_ID`、`INVALID_USER_KEY`、`NOT_TEAM_MEMBER`。
 
 ---
+
+## 3.13 Evidence TaskRun
+
+Evidence 路由是严格白名单 BFF，不是 `/v3/evidence/*` 透明代理。所有接口均要求公共约定中的两个 Panel Header；Panel 根据 `x-tdai-user-key` 让内核派生操作人身份，忽略浏览器提供的 `user_id`、`reviewer_user_id` 等身份字段。
+
+| Panel 路径 | 内核路径 | 请求 `data` |
+|---|---|---|
+| `POST /evidence/runs/list` | `/v3/evidence/task-runs/list` | `team_id`，可选 `task_id`、`asset_id`、`asset_type`、`status`、`variant`、`candidate_status`、`evaluation_group_id`、`limit`、`offset` |
+| `POST /evidence/runs/get` | `/v3/evidence/task-runs/get` | `{ run_id }` |
+| `POST /evidence/runs/receipt` | `/v3/evidence/task-runs/receipt` | `{ run_id }` |
+| `POST /evidence/runs/review` | `/v3/evidence/task-runs/reviews` | `{ run_id, access_id, decision, reason, behavior_refs?, diff_refs?, decision_refs? }` |
+| `POST /evidence/runs/candidates/review` | `/v3/evidence/candidates/review` | `{ run_id, candidate_id, status, reason }` |
+
+`review.decision` 仅可为 `support`、`not_support` 或 `uncertain`；candidate `status` 仅可为 `approved` 或 `rejected`。`list` 的 `limit` 上限为 100。缺少 `run_id` 返回 `MISSING_RUN_ID`；不合法审核输入返回 `INVALID_EVIDENCE_REVIEW` 或 `INVALID_CANDIDATE_REVIEW`。评测数据是 `get` 快照中的 `evaluations`，本 BFF 不开放评测写入。其余错误信封由内核原样返回。
+
+### 本地真实演示
+
+在 `MemoryPanel` 目录执行 `node --import tsx scripts/evidence-panel-demo.ts`。脚本只绑定 `127.0.0.1`，创建临时 SQLite 目录，启动真实 MemoryCore Gateway 与 Panel，并通过真实 HTTP API 写入明确标记为 synthetic 的团队、TaskRun、资产访问、审核、候选和对照评测数据。启动日志会打印 Panel URL、实例 ID 与本地 demo key；Ctrl-C 会停止服务并删除临时目录。先运行 `web` 构建以提供静态页面。
 
 ## 4. 附录
 

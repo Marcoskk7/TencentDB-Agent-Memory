@@ -332,6 +332,10 @@
   box-shadow: var(--tea-shadow-xs);
 }
 
+/* Keep the existing layer/body scroller bounded after Tabs adds a wrapper. */
+._memory-detail-tabs, ._memory-detail-tabpanel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+._memory-detail-evidence { overflow-y: auto; padding-top: 12px; }
+
 /* 详情空态：同样套卡片外框并撑满高度，避免"贴边灰底"与留白 */
 ._memory-detail-empty-card {
   display: flex;

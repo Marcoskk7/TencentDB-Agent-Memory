@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import moment, { type Moment } from 'moment';
-import { Button, DatePicker, Dropdown, Input, List, Modal, Pagination } from 'tea-component';
+import { Button, DatePicker, Dropdown, Input, List, Modal, Pagination, TabPanel, Tabs } from 'tea-component';
 import { type MemoryLayer, type MemoryBlock, type AtomicItem } from '../constants/types';
 import { useLayers } from '../constants/constants';
 import { getLayerCount, stripAtMention, extractRole, formatDisplayTime } from '../utils/utils';
@@ -9,6 +9,8 @@ import { stripScenarioMeta, copyToClipboard } from '../utils/memory-utils';
 import { useUserDisplayName } from '@/services/user-profile-store';
 import { tea } from '@/lib/tea-bridge';
 import { MarkdownView } from '@/components/MarkdownView';
+import { EvidenceWorkspace } from '@/components/evidence/EvidenceWorkspace';
+import { useTeams } from '@/services';
 import type { ChatMemorySearchHit } from '@/lib/teamApi';
 import {
   AppIcon,
@@ -451,6 +453,8 @@ export function BlockDetail({
   onSearchLayer?: (l: 'L0' | 'L1', query: string) => Promise<ChatMemorySearchHit[]>;
 }) {
   const { t } = useTranslation();
+  const { activeTeamId } = useTeams();
+  const [detailTab, setDetailTab] = useState<'content' | 'evidence'>('content');
   const LAYERS = useLayers();
   // 分页只针对「当前时间窗口内」的条目：layerTotal 是窗口内总数（父级从 BFF 的
   // res.total 取），列表数据也是窗口内的，两者一致才不会有「全量总页数翻到空页」。
@@ -468,6 +472,8 @@ export function BlockDetail({
       : undefined;
   // 上传者展示名（回退 user_id）
   const uploaderName = useUserDisplayName(block.uploaded_by_user_id);
+
+  useEffect(() => setDetailTab('content'), [block.id]);
 
   // ── 编辑（L1/L2/L3）──
   const [editing, setEditing] = useState<{
@@ -690,6 +696,11 @@ export function BlockDetail({
         )}
       </div>
 
+      <Tabs className="_memory-detail-tabs" activeId={detailTab} onActive={(tab) => setDetailTab(tab.id as 'content' | 'evidence')} tabs={[
+        { id: 'content', label: t('evidence.contentTab') },
+        { id: 'evidence', label: t('evidence.usageTab') },
+      ]}>
+      <TabPanel id="content" className="_memory-detail-tabpanel">
       <div className="_memory-detail-layers">
         {LAYERS.map((l) => {
           const active = l.id === layer;
@@ -1010,6 +1021,11 @@ export function BlockDetail({
           </div>
         )}
       </div>
+      </TabPanel>
+      <TabPanel id="evidence" className="_memory-detail-tabpanel _memory-detail-evidence">
+        {detailTab === 'evidence' && <EvidenceWorkspace teamId={activeTeamId ?? ''} assetId={block.id} assetType="chat_memory" />}
+      </TabPanel>
+      </Tabs>
 
       {/* 编辑 Modal（L1/L2/L3 通用）：正文用多行输入覆盖写 */}
       {editing && (

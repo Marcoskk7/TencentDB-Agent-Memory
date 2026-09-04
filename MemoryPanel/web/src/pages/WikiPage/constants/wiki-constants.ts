@@ -39,7 +39,7 @@ export const SCOPE_LABEL_KEYS: Record<WikiScopeTab, string> = {
   scope: 'wiki.scope.scope',
 };
 
-export type DetailTab = 'overview' | 'graph' | 'pages' | 'search';
+export type DetailTab = 'overview' | 'graph' | 'pages' | 'search' | 'evidence';
 
 export interface SearchResult {
   path: string;

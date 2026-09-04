@@ -9,6 +9,7 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { zhCN } from './zh-CN';
 import { enUS } from './en-US';
+import { evidenceZhCN, evidenceEnUS } from './evidence';
 
 const STORAGE_KEY = 'tdai-memory.lang';
 
@@ -30,8 +31,8 @@ export function getCurrentLanguage(): string {
 
 i18n.use(initReactI18next).init({
   resources: {
-    'zh-CN': { translation: zhCN },
-    'en-US': { translation: enUS },
+    'zh-CN': { translation: { ...zhCN, ...evidenceZhCN } },
+    'en-US': { translation: { ...enUS, ...evidenceEnUS } },
   },
   lng: detectInitialLanguage(),
   fallbackLng: 'zh-CN',

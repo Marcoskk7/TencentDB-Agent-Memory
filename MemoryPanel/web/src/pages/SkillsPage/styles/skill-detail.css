@@ -49,6 +49,10 @@
   overflow: hidden;
 }
 
+/* Tabs add one flex layer around the fixed footer and scrollable content. */
+._memory-skill-detail-tabs, ._memory-skill-detail-tabpanel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+._memory-skill-detail-evidence { overflow-y: auto; padding-top: 12px; }
+
 /* 滚动内容区：占据 head 以下全部空间并独立滚动 */
 ._memory-skill-detail-scroll {
   flex: 1;

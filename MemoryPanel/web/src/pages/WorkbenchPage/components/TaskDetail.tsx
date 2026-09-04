@@ -3,7 +3,8 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Input, Segment, Text } from 'tea-component';
+import { Button, Input, Segment, Text, Tabs, TabPanel } from 'tea-component';
+import { EvidenceWorkspace } from '@/components/evidence/EvidenceWorkspace';
 import { DeleteIcon, EditIcon, UserIcon, UsergroupIcon } from 'tea-icons-react';
 import { canEditTask, type Task, type Team } from '@/services';
 import { useUserDisplayName } from '@/services/user-profile-store';
@@ -66,12 +67,14 @@ export default function TaskDetail({
 
   // —— 编辑态：只在用户点「编辑」后才进入；草稿独立维护，取消即丢弃 —— //
   const [editing, setEditing] = useState(false);
+  const [tab, setTab] = useState('overview');
   const [draftTitle, setDraftTitle] = useState(task.title);
   const [draftDesc, setDraftDesc] = useState(task.description);
 
   // 切换 task / 退出编辑时同步草稿（避免编辑 A 后切换到 B 草稿还停在 A）
   useEffect(() => {
     setEditing(false);
+    setTab('overview');
     setDraftTitle(task.title);
     setDraftDesc(task.description);
   }, [task.task_id]);
@@ -116,6 +119,11 @@ export default function TaskDetail({
   }, [participation.agentIds, agents]);
 
   return (
+    <Tabs activeId={tab} onActive={(item) => setTab(item.id)} tabs={[
+      { id: 'overview', label: t('evidence.contentTab') },
+      { id: 'evidence', label: t('evidence.usageTab') },
+    ]}>
+    <TabPanel id="overview">
     <div className="_memory-workbench-detail-content">
       {/* === 工具行：编辑 + 状态切换（标题 / task_id / team 已在抽屉头部展示） === */}
       <div className="_memory-workbench-detail-toolbar">
@@ -225,5 +233,10 @@ export default function TaskDetail({
         </div>
       )}
     </div>
+    </TabPanel>
+    <TabPanel id="evidence">
+      {tab === 'evidence' && <EvidenceWorkspace teamId={task.team_id} taskId={task.task_id} />}
+    </TabPanel>
+    </Tabs>
   );
 }

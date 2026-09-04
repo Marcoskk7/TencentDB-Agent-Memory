@@ -2,16 +2,21 @@
  * CodeDetailView —— Code 资产详情视图（仓库信息 / 代码搜索 / 代码探索）。
  * 数据与回调来自 useCodeSources 返回对象；Markdown 用共享 AssetMarkdown（compact 密度）。
  */
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Button, Card, MetricsBoard, SearchBox, StatusTip, Text } from 'tea-component';
+import { Alert, Button, Card, MetricsBoard, SearchBox, StatusTip, TabPanel, Tabs, Text } from 'tea-component';
 import { ArrowLeftIcon, CodeIcon, RefreshIcon } from 'tea-icons-react';
 import { AssetMarkdown } from '@/components/asset/AssetMarkdown';
+import { EvidenceWorkspace } from '@/components/evidence/EvidenceWorkspace';
+import { useTeams } from '@/services';
 import { formatRepoName } from '../constants/code-constants';
 import { statusLabel } from './code-ui';
 import type { CodeSourcesStore } from '../hooks/useCodeSources';
 
 export function CodeDetailView({ store }: { store: CodeSourcesStore }) {
   const { t } = useTranslation();
+  const { activeTeamId } = useTeams();
+  const [detailTab, setDetailTab] = useState<'content' | 'evidence'>('content');
   const {
     setSubView,
     selected,
@@ -27,6 +32,8 @@ export function CodeDetailView({ store }: { store: CodeSourcesStore }) {
     exploreResult,
     handleExplore,
   } = store;
+
+  useEffect(() => setDetailTab('content'), [selected?.code_graph_id]);
 
   if (!selected) return null;
 
@@ -84,6 +91,11 @@ export function CodeDetailView({ store }: { store: CodeSourcesStore }) {
         </Card.Body>
       </Card>
 
+      <Tabs activeId={detailTab} onActive={(tab) => setDetailTab(tab.id as 'content' | 'evidence')} tabs={[
+        { id: 'content', label: t('evidence.contentTab') },
+        { id: 'evidence', label: t('evidence.usageTab') },
+      ]}>
+      <TabPanel id="content">
       {selected?.sync_error && (
         <Alert type="error" className="_codedetail-error">
           {selected.sync_error}
@@ -173,6 +185,11 @@ export function CodeDetailView({ store }: { store: CodeSourcesStore }) {
           )}
         </Card.Body>
       </Card>
+      </TabPanel>
+      <TabPanel id="evidence">
+        {detailTab === 'evidence' && <EvidenceWorkspace teamId={activeTeamId ?? ''} assetId={selected.code_graph_id} assetType="code_graph" />}
+      </TabPanel>
+      </Tabs>
     </div>
   );
 }

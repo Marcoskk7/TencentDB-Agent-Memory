@@ -14,9 +14,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Card, Copy, Input, Modal, Table, Text } from 'tea-component';
+import { Button, Card, Copy, Input, Modal, TabPanel, Table, Tabs, Text } from 'tea-component';
 import { MarkdownView } from '@/components/MarkdownView';
+import { EvidenceWorkspace } from '@/components/evidence/EvidenceWorkspace';
 import { tea } from '@/lib/tea-bridge';
+import { useTeams } from '@/services';
 import {
   getSkill,
   readSkillFile,
@@ -116,6 +118,8 @@ export default function SkillDetailPane(props: {
   onChanged?: () => void;
 }) {
   const { t } = useTranslation();
+  const { activeTeamId } = useTeams();
+  const [detailTab, setDetailTab] = useState<'content' | 'evidence'>('content');
   const [view, setView] = useState<SkillDetail | null>(null);
   // 初始为 true：有 skillId 时首帧就处于「加载中」，避免首次进入先闪一帧空白再变加载态
   const [loading, setLoading] = useState(true);
@@ -156,6 +160,8 @@ export default function SkillDetailPane(props: {
   const skillId = props.skillId ?? stickyRef.current?.id ?? '';
   const skillName = props.skillName ?? stickyRef.current?.name ?? null;
   const canEdit = !!props.canEdit;
+
+  useEffect(() => setDetailTab('content'), [skillId]);
 
   const loadDetail = useCallback(() => {
     if (!skillId) {
@@ -476,6 +482,11 @@ export default function SkillDetailPane(props: {
           </div>
         </div>
 
+        <Tabs className="_memory-skill-detail-tabs" activeId={detailTab} onActive={(tab) => setDetailTab(tab.id as 'content' | 'evidence')} tabs={[
+          { id: 'content', label: t('evidence.contentTab') },
+          { id: 'evidence', label: t('evidence.usageTab') },
+        ]}>
+        <TabPanel id="content" className="_memory-skill-detail-tabpanel">
         {/* 滚动内容区。刷新中（编辑/新建保存后 reload，此时 currentView 仍在）
             叠加半透明遮罩 + loading，给出明确的加载反馈；首次加载（无 currentView）则显示纯 loading 文字。 */}
         <div
@@ -572,6 +583,11 @@ export default function SkillDetailPane(props: {
             )}
           </div>
         )}
+        </TabPanel>
+        <TabPanel id="evidence" className="_memory-skill-detail-tabpanel _memory-skill-detail-evidence">
+          {detailTab === 'evidence' && <EvidenceWorkspace teamId={activeTeamId ?? ''} assetId={skillId} assetType="skill" />}
+        </TabPanel>
+        </Tabs>
       </Card.Body>
 
       {/* Inline file-preview modal（支持编辑 / 删除） */}

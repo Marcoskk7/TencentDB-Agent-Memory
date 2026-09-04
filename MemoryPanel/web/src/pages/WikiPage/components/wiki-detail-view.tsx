@@ -2,6 +2,7 @@
  * WikiDetailView —— Wiki 详情视图（概览 / 图谱 / 页面 / 搜索 四个 Tab + 添加文档 Modal）。
  * 全部数据与回调来自 useWikiSources 的返回对象，组件只做渲染。
  */
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Button, Card, Input, MetricsBoard, Modal, Progress, SearchBox, StatusTip, TabPanel, Tabs, Tag, Text } from 'tea-component';
 import {
@@ -21,6 +22,8 @@ import {
 } from 'tea-icons-react';
 import { knowledgeApi } from '@/lib/api/knowledge-api';
 import { tea } from '@/lib/tea-bridge';
+import { EvidenceWorkspace } from '@/components/evidence/EvidenceWorkspace';
+import { useTeams } from '@/services';
 import { WIKI_ALLOWED_FILE_RE, TYPE_COLORS, TYPE_COLOR_FALLBACK, type DetailTab } from '../constants/wiki-constants';
 import { WikiStatusBadge } from './wiki-ui';
 import { GraphTabContent, PagesTabContent } from './wiki-detail-components';
@@ -28,6 +31,7 @@ import type { WikiSourcesStore } from '../hooks/useWikiSources';
 
 export function WikiDetailView({ store }: { store: WikiSourcesStore }) {
   const { t } = useTranslation();
+  const { activeTeamId } = useTeams();
   const {
     sources,
     selectedWikiId,
@@ -77,6 +81,8 @@ export function WikiDetailView({ store }: { store: WikiSourcesStore }) {
 
   const source = sources.find((s) => s.wiki_id === selectedWikiId);
   const wikiName = source?.name ?? '';
+
+  useEffect(() => { if (activeTab === 'evidence') setActiveTab('overview'); }, [selectedWikiId]);
 
   // 选中 Wiki 已不存在（被删除或刷新失败）时给出可返回的空态，避免死胡同
   if (!source) {
@@ -256,6 +262,7 @@ export function WikiDetailView({ store }: { store: WikiSourcesStore }) {
               </span>
             ),
           },
+          { id: 'evidence', label: t('evidence.usageTab') },
         ]}
       >
         <TabPanel id="overview">
@@ -440,6 +447,9 @@ export function WikiDetailView({ store }: { store: WikiSourcesStore }) {
               <StatusTip status="empty" emptyText={t('wiki.detail.search.empty')} />
             )}
           </div>
+        </TabPanel>
+        <TabPanel id="evidence">
+          {activeTab === 'evidence' && <EvidenceWorkspace teamId={activeTeamId ?? ''} assetId={selectedWikiId} assetType="llm_wiki" />}
         </TabPanel>
       </Tabs>
 
