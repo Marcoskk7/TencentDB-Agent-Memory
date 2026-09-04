@@ -18,6 +18,9 @@ The MVP is split into four layers:
 `contributed` requires a clean with-assets/without-assets evaluation with
 independent causal evidence. Candidate assets remain `candidate` until reviewed.
 
-The default service is persistence-neutral and ships with an in-process store
-for local/demo use. Deployments should provide a store implementation backed by
-the migration schema before relying on multi-process durability.
+Standalone gateway routes use SQLite with scoped durable idempotency and atomic
+ingestion. Direct `EvidenceService` construction still defaults to an in-process
+store for unit tests. Service deployments explicitly return 503 until a shared
+durable adapter exists. See [the verification guide](asset-evidence-verification.md)
+for the repaired fixed-Skill Proxy path, local workspace capture, and remaining
+deployment/adapter limits.
