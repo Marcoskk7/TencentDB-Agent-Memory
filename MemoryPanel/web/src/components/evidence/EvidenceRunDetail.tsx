@@ -99,7 +99,7 @@ export function EvidenceRunDetail({
   return (
     <article className="_evidence-detail">
       <header>
-        <h2>{run.task_goal}</h2>
+        <h2>{run.task_goal.replace(/\s+/g, ' ').trim().slice(0, 160)}{run.task_goal.replace(/\s+/g, ' ').trim().length > 160 ? '…' : ''}</h2>
         <p>
           {t(`evidence.status.${run.status}`)} · {t('evidence.receiptRevision')}: {receipt.revision}{' '}
           · {t('evidence.contributionEvidence')}:{' '}

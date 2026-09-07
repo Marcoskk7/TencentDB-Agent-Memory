@@ -588,6 +588,7 @@ export function createSkillBridgeHandler(
         "x-tdai-service-id": ids.space_id || config.coreSkill.serviceId,
         "Content-Type": "application/json",
       };
+      if (ids.user_key) headers["x-tdai-user-key"] = ids.user_key;
       const dlOutboundBody = JSON.stringify(outbound);
       const dlCallStart = (deps.now ?? Date.now)();
       let coreResp: Response;
@@ -866,6 +867,10 @@ export function createSkillBridgeHandler(
       "x-tdai-service-id": ids.space_id || config.coreSkill.serviceId,
       "Content-Type": "application/json",
     };
+    // Core authenticates the end user from x-tdai-user-key. The LLM-facing
+    // bridge request intentionally does not carry this header; recover it from
+    // the initialized session/binding and stamp it on the Core request.
+    if (ids.user_key) headers["x-tdai-user-key"] = ids.user_key;
 
     const outboundBody = JSON.stringify(outbound);
     const callStart = (deps.now ?? Date.now)();

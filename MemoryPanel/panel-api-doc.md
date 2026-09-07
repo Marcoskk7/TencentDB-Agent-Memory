@@ -164,9 +164,9 @@
 **转发语义**：
 - 请求体整体透传给内核对应 action；响应信封原样返回。
 - 路径最后一段即 action 名（如 `POST /meta/agent/list` → 内核 `agent/list`）。
-- 白名单之外 action 返回 `404 UNKNOWN_META_ACTION`；`agent-fixed-asset/*` 返回 `501 NOT_IN_SCOPE`（该类操作由 Panel 业务路由内部直调，见 §3.4/§3.10）。
+- 白名单之外 action 返回 `404 UNKNOWN_META_ACTION`。
 
-**开放 action 清单（53 条）**：
+**开放 action 清单（含 agent fixed asset 操作）**：
 
 | 实体 | action |
 |---|---|
@@ -184,7 +184,7 @@
 | instance-quota | get |
 | config/user | get、set |
 
-**未开放（`501 NOT_IN_SCOPE`）**：`agent-fixed-asset/set`、`agent-fixed-asset/list`、`agent-fixed-asset/list-with-detail`、`agent-fixed-asset/summary-by-agents`。
+**Agent fixed asset**：`set`、`list`、`list-with-detail`、`summary-by-agents` 均通过本代理开放，用于 Panel 展示和维护 Agent 固定资产详情。
 
 **Panel 层特殊处理（不纯透传）**：
 
@@ -1279,7 +1279,6 @@ Evidence 路由是严格白名单 BFF，不是 `/v3/evidence/*` 透明代理。�
 |---|---|---|
 | 404 | UNKNOWN_META_ACTION | 未知 meta action |
 | 404 | UNKNOWN_SKILL_ACTION | 未知 skill action |
-| 501 | NOT_IN_SCOPE | action 未对面板开放（agent-fixed-asset/*） |
 | 403 | permission_denied | 非 system_admin 操作默认模板 |
 | 400 | INVALID_PARAM | `agent/set-default-template` 缺 `team_id`/`template` |
 

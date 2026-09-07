@@ -172,11 +172,16 @@ export default function SkillDetailPane(props: {
     }
     setLoading(true);
     setError(null);
-    getSkill({ skill_id: skillId, include_content: true, include_manifest: true })
+    getSkill({
+      skill_id: skillId,
+      team_id: props.teamId,
+      include_content: true,
+      include_manifest: true,
+    })
       .then((v) => setView(v))
       .catch((err) => setError(err instanceof Error ? err.message : String(err)))
       .finally(() => setLoading(false));
-  }, [skillId]);
+  }, [skillId, props.teamId]);
 
   useEffect(() => {
     // 切换 skill 时重置所有编辑/版本态，避免残留上一条的草稿
@@ -223,7 +228,12 @@ export default function SkillDetailPane(props: {
     setFileEditing(false);
     setFilePreviewLoading(true);
     try {
-      const f = await readSkillFile({ skill_id: skillId, path, encoding: 'utf-8' });
+      const f = await readSkillFile({
+        skill_id: skillId,
+        team_id: props.teamId,
+        path,
+        encoding: 'utf-8',
+      });
       setFilePreview(f);
     } catch (err) {
       setFilePreview({
@@ -403,6 +413,7 @@ export default function SkillDetailPane(props: {
     try {
       const f = await readSkillFile({
         skill_id: versionView.skill_id,
+        team_id: props.teamId || versionView.team_id,
         path,
         version: versionView.version,
         encoding: 'utf-8',

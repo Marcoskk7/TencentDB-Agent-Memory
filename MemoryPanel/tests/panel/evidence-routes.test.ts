@@ -43,12 +43,12 @@ describe('evidence Panel BFF', () => {
     const { app, postEnvelope } = makeApp();
     const response = await app.request('/evidence/runs/list', {
       method: 'POST', headers,
-      body: JSON.stringify({ team_id: 'team_1', asset_id: 'asset_1', user_id: 'forged', reviewer_user_id: 'forged-reviewer', limit: 999, offset: 2 }),
+      body: JSON.stringify({ team_id: 'team_1', asset_id: 'asset_1', review_status: 'pending', user_id: 'forged', reviewer_user_id: 'forged-reviewer', limit: 999, offset: 2 }),
     });
     expect(response.status).toBe(200);
     expect(postEnvelope).toHaveBeenCalledWith(
       '/v3/evidence/task-runs/list',
-      { team_id: 'team_1', asset_id: 'asset_1', limit: 100, offset: 2 },
+      { team_id: 'team_1', asset_id: 'asset_1', review_status: 'pending', limit: 100, offset: 2 },
       expect.objectContaining({ endpoint: 'http://kernel.example', apiKey: 'server-owned-key', instanceId: 'resolved-instance', userKey: 'browser-user-key' }),
     );
   });

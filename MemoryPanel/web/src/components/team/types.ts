@@ -21,6 +21,7 @@ export interface MountableAsset {
   group: string;
   slug: string;
   status?: string;
+  visibility?: string;
 }
 
 export interface AgentCard {

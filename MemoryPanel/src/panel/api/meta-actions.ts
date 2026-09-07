@@ -1,7 +1,6 @@
 /**
  * 内核 /v3/meta/* 公开 action 列表（v3.2：55 条，不含 internal）。
- * 注：agent-fixed-asset/* 仍在 META_ACTIONS 登记但公开 proxy 501 NOT_IN_SCOPE；
- * Control 业务路由可通过 metaKernel.invoke 直调。
+ * agent-fixed-asset/* 已开放给 Panel proxy，供 Agent fixed asset 详情与挂载流程使用。
  */
 
 export const META_LIST_ACTIONS = new Set([
@@ -84,14 +83,8 @@ export const META_ACTIONS = [
 
 export type MetaAction = (typeof META_ACTIONS)[number];
 
-/**
- * 暂未开放给面板的 action 前缀。
- *
- * asset/* 已放开：skill「分配到 Agent」走授权接口（acl/grant）时，需先把 skill
- * 登记为 meta 资产（asset/create，owner=当前登录用户），再授予目标 agent use 权限。
- * agent-fixed-asset/*（运行时固定注入绑定）仍暂不开放。
- */
-const NOT_IN_SCOPE_PREFIXES = ['agent-fixed-asset/'] as const;
+/** 暂未开放给面板的 action 前缀。 */
+const NOT_IN_SCOPE_PREFIXES = [] as const;
 
 export function isNotInScopeAction(action: string): boolean {
   return NOT_IN_SCOPE_PREFIXES.some((prefix) => action.startsWith(prefix));

@@ -70,7 +70,7 @@ export function registerEvidenceRoutes(api: Hono, deps: PanelDeps): void {
     const source = await readBody(c);
     const body: JsonObject = {};
     // Copy only query fields. In particular do not forward browser-provided actor IDs.
-    for (const field of ['team_id', 'task_id', 'asset_id', 'asset_type', 'status', 'variant', 'candidate_status', 'evaluation_group_id']) {
+    for (const field of ['team_id', 'task_id', 'asset_id', 'asset_type', 'status', 'variant', 'candidate_status', 'review_status', 'evaluation_group_id']) {
       const value = text(source[field]);
       if (value) body[field] = value;
     }

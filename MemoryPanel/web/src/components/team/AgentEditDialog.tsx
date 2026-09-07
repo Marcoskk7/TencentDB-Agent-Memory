@@ -18,7 +18,7 @@ import { Button, Input, Modal } from 'tea-component';
 import { useTranslation } from 'react-i18next';
 import { ToolsIcon, CodeIcon, BooksIcon, ChatIcon } from 'tea-icons-react';
 import { type Agent as StoreAgent, invalidateBackendCache, writeAgentUiMeta } from '@/services';
-import { agentsApi, skillApi, chatMemoryApi } from '@/lib/teamApi';
+import { agentsApi, chatMemoryApi } from '@/lib/teamApi';
 import { knowledgeApi } from '@/lib/api/knowledge-api';
 import { tea } from '@/lib/tea-bridge';
 import { useTeamAssets, syncChatMemoryBindings } from './useAgentAssets';
@@ -55,7 +55,7 @@ export default function AgentEditDialog({
   const [savingAssets, setSavingAssets] = useState(false);
   // agent 真实拥有但可能不在 team 资产池的绑定项（如 skill fork 副本、借入的 memory），
   // 注入资产池以保证「已绑定」项都能显示、数量与 list 卡片一致。
-  const [realSkillItems, setRealSkillItems] = useState<Array<{ key: string; title: string }>>([]);
+  const [realSkillItems, setRealSkillItems] = useState<Array<{ key: string; title: string; status?: string; visibility?: string }>>([]);
   const [realCodeGraphIds, setRealCodeGraphIds] = useState<string[]>([]);
   const [realWikiIds, setRealWikiIds] = useState<string[]>([]);
   const [realChatMemoryIds, setRealChatMemoryIds] = useState<string[]>([]);
@@ -87,9 +87,13 @@ export default function AgentEditDialog({
   const skillsAssets = useMemo(() => {
     const map = new Map(assets.skills.map((item) => [item.key, item]));
     for (const it of realSkillItems) {
-      if (!map.has(it.key)) {
-        map.set(it.key, { key: it.key, title: it.title, group: 'SKILL', slug: it.key });
-      }
+      const existing = map.get(it.key);
+      map.set(it.key, {
+        ...(existing ?? { key: it.key, title: it.title, group: 'SKILL', slug: it.key }),
+        title: existing?.title ?? it.title,
+        status: it.status ?? existing?.status,
+        visibility: it.visibility ?? existing?.visibility,
+      });
     }
     return Array.from(map.values());
   }, [assets.skills, realSkillItems]);
@@ -220,17 +224,21 @@ export default function AgentEditDialog({
 
     // 读真实绑定源（权威、与运行时一致），仅用于只读展示。
     Promise.allSettled([
-      skillApi.listByAgent(agent.team_id, agent.agent_id),
+      agentsApi.getAssets(agent.agent_id),
       knowledgeApi.agentFixed(agent.agent_id),
       chatMemoryApi.agentFixed(agent.agent_id),
     ])
       .then(([skillResult, knowledgeResult, chatResult]) => {
         if (cancelled) return;
 
-        const skillItems = skillResult.status === 'fulfilled' ? skillResult.value : [];
+        const skillItems = skillResult.status === 'fulfilled'
+          ? skillResult.value.filter((item) => item.asset_type === 'skill')
+          : [];
         const nextSkillItems = skillItems.map((s) => ({
-          key: s.skill_id,
-          title: s.name || s.skill_id,
+          key: s.asset_id,
+          title: s.name || s.asset_id,
+          status: s.status,
+          visibility: s.visibility,
         }));
         setRealSkillItems(nextSkillItems);
         setSkills(nextSkillItems.map((s) => s.key));

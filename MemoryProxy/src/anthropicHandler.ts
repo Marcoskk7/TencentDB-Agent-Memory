@@ -253,10 +253,19 @@ export function flattenAnthropicMessagesForOpik(
   return result;
 }
 
-/** Extract Anthropic API key from request headers (x-api-key or Authorization Bearer). */
+/**
+ * Extract the caller credential from request headers.
+ *
+ * Claude Code's managed setup writes the TDAI User Key as
+ * `X-Tdai-User-Token`; accept it alongside the standard Anthropic headers so
+ * the same credential reaches session init and the Skill Bridge.
+ */
 function extractApiKey(c: Context): string {
   const xApiKey = c.req.header("x-api-key");
   if (xApiKey) return xApiKey;
+
+  const tdaiUserToken = c.req.header("x-tdai-user-token");
+  if (tdaiUserToken) return tdaiUserToken;
 
   const authHeader = c.req.header("authorization") ?? c.req.header("Authorization") ?? "";
   if (authHeader.startsWith("Bearer ")) {

@@ -2,10 +2,9 @@
  * /api/v1/chat-memory/* —— Chat Memory 面板专用业务路由（stateless panel 架构）。
  *
  * 为什么单独一层而不是走 /meta/{action}：
- *   - 新面板 §0 决策 12.3：`asset/*` 与 `agent-fixed-asset/*` 一期在 meta pass-through
- *     里 501（NOT_IN_SCOPE）。
- *   - 但 Chat Memory 面板 3-tab 页面需要这些资产操作。本文件就是那个"12.3 决策例外"
- *     的落点：只对 chat_memory 这一类 asset 做业务化包装，跟 skill/wiki/code_graph 隔离。
+ *   - Chat Memory 面板 3-tab 页面需要对 chat_memory 做业务化包装；固定资产通用读写
+ *     已通过 `/meta/agent-fixed-asset/*` 开放，本文件仍只负责 chat_memory 的类型校验、
+ *     借入上限和聚合逻辑。
  *
  * 请求约定（跟 /meta/* 相同）：
  *   - 全部 POST

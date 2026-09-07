@@ -67,6 +67,9 @@ describe("evidence chain", () => {
     await svc.recordReview(first.run_id, { access_id: access.access_id, decision: "uncertain", reason: "reviewed after completion", reviewer_user_id: "reviewer" });
     const page = await svc.listTaskRuns({ team_id: "t1", task_id: "task", offset: 0, limit: 10 });
     expect(page.items.map(x => x.run_id)).toEqual([first.run_id]);
+    const pending = await svc.createTaskRun({ team_id: "t1", agent_id: "a", user_id: "u", agent_source: "test", session_id: "s2", request_id: "r2", execution_id: "e2", task_goal: "pending" });
+    await svc.recordAccess(pending.run_id, { asset_id: "asset-2", asset_type: "skill", version: 1, mode: "read", reader_team_id: "t1", reader_agent_id: "a", reader_user_id: "u" });
+    expect((await svc.listTaskRuns({ team_id: "t1", review_status: "pending" })).items.map(x => x.run_id)).toEqual([pending.run_id]);
     expect(second.team_id).toBe("t2");
     expect((await svc.getSnapshot(first.run_id)).reviews).toHaveLength(1);
   });

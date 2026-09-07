@@ -19,6 +19,11 @@ export function EvidenceWorkspace(props: EvidenceWorkspaceProps) {
   return <ScopedWorkspace key={key} {...props} />;
 }
 
+const runTitle = (goal: string) => {
+  const compact = goal.replace(/\s+/g, ' ').trim();
+  return compact.length > 120 ? `${compact.slice(0, 120)}…` : compact;
+};
+
 function ScopedWorkspace({
   teamId,
   taskId,
@@ -57,6 +62,7 @@ function ScopedWorkspace({
         asset_type: assetType,
         limit: 12,
         offset: page * 12,
+        ...(mode === 'runs' ? { review_status: 'pending' as const } : {}),
         ...(mode === 'candidates' ? { candidate_status: candidateStatus } : {}),
         ...(mode === 'evaluations' ? { variant: 'with_assets' as const } : {}),
         ...(group ? { evaluation_group_id: group } : {}),
@@ -167,7 +173,7 @@ function ScopedWorkspace({
                     onClick={() => setSelectedId(run.run_id)}
                   >
                     <span className="_evidence-run-main">
-                      <strong>{run.task_goal}</strong>
+                      <strong>{runTitle(run.task_goal)}</strong>
                       <code>{run.run_id}</code>
                     </span>
                     <span className="_evidence-run-meta">

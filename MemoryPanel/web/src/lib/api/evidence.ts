@@ -170,6 +170,7 @@ export interface EvidenceRunListParams {
   status?: RunStatus;
   variant?: RunVariant;
   candidate_status?: CandidateAsset['status'];
+  review_status?: 'pending' | 'reviewed';
   evaluation_group_id?: string;
   limit?: number;
   offset?: number;

@@ -137,13 +137,14 @@ export function AssetCheckList({
               const checked = checkedKeys.includes(a.key);
               const notReady = !isAssetSelectable(a);
               const disabled = readOnly || disabledKeys.has(a.key) || notReady;
+              const visibilitySuffix = a.visibility ? ` · visibility=${a.visibility}` : '';
               return (
                 <li key={a.key} className="_memory-asset-check-item">
                   <Checkbox value={checked} disabled={disabled} onChange={() => { if (!disabled) onToggle(a.key); }}>
                     <span className="_memory-asset-check-item-row">
                       <span className="_memory-asset-check-item-title">{a.title}</span>
                       <span className="_memory-asset-check-item-slug">
-                        {a.slug}{disabledKeys.has(a.key) ? t('shared.selfMemory') : notReady ? ` · ${a.status}` : ''}
+                        {a.slug}{disabledKeys.has(a.key) ? t('shared.selfMemory') : notReady ? ` · ${a.status}${visibilitySuffix}` : visibilitySuffix}
                       </span>
                     </span>
                   </Checkbox>
