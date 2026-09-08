@@ -9,7 +9,7 @@ export interface EvidenceStore {
   createRun(run: TaskRun): Promise<TaskRun>;
   /** Creates the run and its audit-start event as one durable operation. */
   createRunIdempotent(run: TaskRun, idempotencyScope?: string, payloadJson?: string): Promise<{ run: TaskRun; created: boolean }>;
-  commitIngest(kind: "access" | "behavior" | "diff" | "claim" | "validation", value: AssetAccess | Behavior | CodeDiff | AgentUsageClaim | Validation, event: Omit<EvidenceEvent, "event_id" | "sequence" | "received_at">, idempotencyKey?: string, payloadJson?: string): Promise<{ value: AssetAccess | Behavior | CodeDiff | AgentUsageClaim | Validation; created: boolean }>;
+  commitIngest(kind: "access" | "behavior" | "diff" | "claim" | "validation" | "evaluation", value: AssetAccess | Behavior | CodeDiff | AgentUsageClaim | Validation | Evaluation, event: Omit<EvidenceEvent, "event_id" | "sequence" | "received_at">, idempotencyKey?: string, payloadJson?: string): Promise<{ value: AssetAccess | Behavior | CodeDiff | AgentUsageClaim | Validation | Evaluation; created: boolean }>;
   commitClose(runId: string, candidate: CandidateAsset | undefined, events: Omit<EvidenceEvent, "event_id" | "sequence" | "received_at">[], patch: Partial<TaskRun>): Promise<void>;
   saveReceipt(receipt: AssetEvidenceReceipt): Promise<AssetEvidenceReceipt>;
   getReceipt(runId: string, revision: number): Promise<AssetEvidenceReceipt | undefined>;
@@ -45,8 +45,8 @@ export interface EvidenceRunFilter { team_id: string; task_id?: string; user_id?
 export interface EvidenceRunPage { items: TaskRun[]; total: number; offset: number; limit: number; }
 
 const clone = <T>(value: T): T => structuredClone(value);
-type IngestKind = "access" | "behavior" | "diff" | "claim" | "validation";
-type IngestValue = AssetAccess | Behavior | CodeDiff | AgentUsageClaim | Validation;
+type IngestKind = "access" | "behavior" | "diff" | "claim" | "validation" | "evaluation";
+type IngestValue = AssetAccess | Behavior | CodeDiff | AgentUsageClaim | Validation | Evaluation;
 function ingestRecordId(kind: IngestKind, value: IngestValue): string {
   switch (kind) {
     case "access": return (value as AssetAccess).access_id;
@@ -54,6 +54,7 @@ function ingestRecordId(kind: IngestKind, value: IngestValue): string {
     case "diff": return (value as CodeDiff).diff_id;
     case "claim": return (value as AgentUsageClaim).claim_id;
     case "validation": return (value as Validation).validation_id;
+    case "evaluation": return (value as Evaluation).evaluation_id;
   }
 }
 
@@ -87,7 +88,7 @@ export class InMemoryEvidenceStore implements EvidenceStore {
     if (scope) this.runIdempotency.set(scope, { runId: run.run_id, payloadJson });
     return { run: clone(run), created: true };
   }
-  async commitIngest(kind: "access" | "behavior" | "diff" | "claim" | "validation", value: AssetAccess | Behavior | CodeDiff | AgentUsageClaim | Validation, event: Omit<EvidenceEvent, "event_id" | "sequence" | "received_at">, key?: string, payloadJson = "") {
+  async commitIngest(kind: "access" | "behavior" | "diff" | "claim" | "validation" | "evaluation", value: AssetAccess | Behavior | CodeDiff | AgentUsageClaim | Validation | Evaluation, event: Omit<EvidenceEvent, "event_id" | "sequence" | "received_at">, key?: string, payloadJson = "") {
     const recordId = ingestRecordId(kind, value);
     const scope = key && `${kind}:${value.run_id}:${key}`;
     if (scope) { const existing = this.ingestIdempotency.get(scope); if (existing) { if (existing.payloadJson !== payloadJson) throw new Error("idempotency key conflicts with a different payload"); return { value: this.recordFor(kind, existing.recordId), created: false }; } }
@@ -96,8 +97,8 @@ export class InMemoryEvidenceStore implements EvidenceStore {
   async commitClose(runId: string, candidate: CandidateAsset | undefined, events: Omit<EvidenceEvent, "event_id" | "sequence" | "received_at">[], patch: Partial<TaskRun>) { if (candidate) await this.addCandidate(candidate); for (const event of events) await this.appendEvent(event); await this.updateRun(runId, patch); }
   async saveReceipt(receipt: AssetEvidenceReceipt) { const key = `${receipt.run_id}:${receipt.revision}`; if (this.receipts.has(key)) throw new Error("receipt revision already exists"); this.receipts.set(key, clone(receipt)); return clone(receipt); }
   async getReceipt(runId: string, revision: number) { const receipt = this.receipts.get(`${runId}:${revision}`); return receipt && clone(receipt); }
-  private storeRecord(kind: "access" | "behavior" | "diff" | "claim" | "validation", value: AssetAccess | Behavior | CodeDiff | AgentUsageClaim | Validation) { const map = kind === "access" ? this.accesses : kind === "behavior" ? this.behaviors : kind === "diff" ? this.diffs : kind === "claim" ? this.claims : this.validations; const recordId = ingestRecordId(kind, value); if (map.has(recordId)) throw new Error(`${kind} already exists`); map.set(recordId, clone(value) as never); }
-  private recordFor(kind: "access" | "behavior" | "diff" | "claim" | "validation", recordId: string) { const map = kind === "access" ? this.accesses : kind === "behavior" ? this.behaviors : kind === "diff" ? this.diffs : kind === "claim" ? this.claims : this.validations; const value = map.get(recordId); if (!value) throw new Error("idempotency record references a missing object"); return clone(value) as AssetAccess | Behavior | CodeDiff | AgentUsageClaim | Validation; }
+  private storeRecord(kind: "access" | "behavior" | "diff" | "claim" | "validation" | "evaluation", value: AssetAccess | Behavior | CodeDiff | AgentUsageClaim | Validation | Evaluation) { const map = kind === "access" ? this.accesses : kind === "behavior" ? this.behaviors : kind === "diff" ? this.diffs : kind === "claim" ? this.claims : kind === "evaluation" ? this.evaluations : this.validations; const recordId = ingestRecordId(kind, value); if (map.has(recordId)) throw new Error(`${kind} already exists`); map.set(recordId, clone(value) as never); }
+  private recordFor(kind: "access" | "behavior" | "diff" | "claim" | "validation" | "evaluation", recordId: string) { const map = kind === "access" ? this.accesses : kind === "behavior" ? this.behaviors : kind === "diff" ? this.diffs : kind === "claim" ? this.claims : kind === "evaluation" ? this.evaluations : this.validations; const value = map.get(recordId); if (!value) throw new Error("idempotency record references a missing object"); return clone(value) as AssetAccess | Behavior | CodeDiff | AgentUsageClaim | Validation | Evaluation; }
   async getRun(runId: string) { const v = this.runs.get(runId); return v && clone(v); }
   async updateRun(runId: string, patch: Partial<TaskRun>) { const old = this.runs.get(runId); if (!old) throw new Error("run not found"); const next = { ...old, ...clone(patch) }; this.runs.set(runId, next); return clone(next); }
   async addAccess(v: AssetAccess) { if (this.accesses.has(v.access_id)) throw new Error("access already exists"); this.accesses.set(v.access_id, clone(v)); return clone(v); }
@@ -127,7 +128,7 @@ export class InMemoryEvidenceStore implements EvidenceStore {
   async listCandidates(runId: string) { return [...this.candidates.values()].filter(v => v.source_run_id === runId).map(clone); }
   async updateCandidate(candidateId: string, patch: Pick<CandidateAsset, "status">) { const v = this.candidates.get(candidateId); if (!v) throw new Error("candidate not found"); const next = { ...v, ...patch }; this.candidates.set(candidateId, next); return clone(next); }
   async transitionCandidate(candidateId: string, status: "approved" | "rejected") { const v = this.candidates.get(candidateId); if (!v) throw new Error("candidate not found"); if (v.status !== "candidate") throw new Error("candidate already reviewed"); return this.updateCandidate(candidateId, { status }); }
-  async commitReview(review: Review, event: Omit<EvidenceEvent, "event_id" | "sequence" | "received_at">) { await this.addReview(review); await this.appendEvent(event); await this.updateRun(review.run_id, { receipt_revision: ((await this.getRun(review.run_id))?.receipt_revision ?? 0) + 1 }); return clone(review); }
+  async commitReview(review: Review, event: Omit<EvidenceEvent, "event_id" | "sequence" | "received_at">) { const prior = (await this.listEvents(review.run_id)).find(e => e.idempotency_key === event.idempotency_key); if (prior) return clone(this.reviews.get(prior.data.review_id as string)!); await this.addReview(review); await this.appendEvent(event); await this.updateRun(review.run_id, { receipt_revision: ((await this.getRun(review.run_id))?.receipt_revision ?? 0) + 1 }); return clone(review); }
   async commitCandidateReview(runId: string, candidateId: string, status: "approved" | "rejected", event: Omit<EvidenceEvent, "event_id" | "sequence" | "received_at">) { const next = await this.transitionCandidate(candidateId, status); await this.appendEvent(event); await this.updateRun(runId, { receipt_revision: ((await this.getRun(runId))?.receipt_revision ?? 0) + 1 }); return next; }
   async listRuns(filter: EvidenceRunFilter): Promise<EvidenceRunPage> {
     const offset = Math.max(0, filter.offset ?? 0), limit = Math.min(100, Math.max(1, filter.limit ?? 50));
@@ -175,7 +176,7 @@ export class SqliteEvidenceStore implements EvidenceStore {
         const previous = this.one<{ run_id: string; payload_json: string }>("run_idempotency", scope);
         if (previous) {
           if (previous.payload_json !== payloadJson) throw new Error("idempotency key conflicts with a different task-run payload");
-          const run = await this.getRun(previous.run_id);
+          const run = this.one<TaskRun>("run", previous.run_id);
           if (!run) throw new Error("idempotency record references a missing run");
           this.db.exec("COMMIT");
           return { run, created: false };
@@ -188,16 +189,17 @@ export class SqliteEvidenceStore implements EvidenceStore {
       return { run: clone(v), created: true };
     } catch (e) { try { this.db.exec("ROLLBACK"); } catch {} throw e; }
   }
-  async commitIngest(kind: "access" | "behavior" | "diff" | "claim" | "validation", value: AssetAccess | Behavior | CodeDiff | AgentUsageClaim | Validation, event: Omit<EvidenceEvent, "event_id" | "sequence" | "received_at">, key?: string, payloadJson = "") {
+  async commitIngest(kind: "access" | "behavior" | "diff" | "claim" | "validation" | "evaluation", value: AssetAccess | Behavior | CodeDiff | AgentUsageClaim | Validation | Evaluation, event: Omit<EvidenceEvent, "event_id" | "sequence" | "received_at">, key?: string, payloadJson = "") {
     const recordId = ingestRecordId(kind, value);
     const scope = key && `${kind}:${value.run_id}:${key}`;
     this.db.exec("BEGIN IMMEDIATE"); try {
       if (scope) { const previous = this.one<{ record_id: string; payload_json: string }>("ingest_idempotency", scope); if (previous) { if (previous.payload_json !== payloadJson) throw new Error("idempotency key conflicts with a different task-run payload"); const prior = this.one<any>(kind, previous.record_id); if (!prior) throw new Error("idempotency record references a missing object"); this.db.exec("COMMIT"); return { value: prior, created: false }; } }
+      const run = this.one<TaskRun>("run", value.run_id); if (!run || run.status !== "running") throw new Error("run is closed or missing");
       this.put(kind, recordId, value); this.insertEvent(event); if (scope) this.put("ingest_idempotency", scope, { record_id: recordId, payload_json: payloadJson, created_at: (value as any).created_at }, value.run_id);
       this.db.exec("COMMIT"); return { value: clone(value), created: true };
     } catch (e) { try { this.db.exec("ROLLBACK"); } catch {} throw e; }
   }
-  async commitClose(runId: string, candidate: CandidateAsset | undefined, events: Omit<EvidenceEvent, "event_id" | "sequence" | "received_at">[], patch: Partial<TaskRun>) { this.db.exec("BEGIN IMMEDIATE"); try { if (candidate) this.put("candidate", candidate.candidate_id, candidate, candidate.source_run_id); for (const event of events) this.insertEvent(event); const run = await this.getRun(runId); if (!run) throw new Error("run not found"); const next = { ...run, ...clone(patch) }; this.db.prepare("UPDATE evidence_docs SET team_id=?,task_id=?,data_json=? WHERE kind='run' AND id=?").run(next.team_id, next.task_id ?? null, JSON.stringify(next), runId); this.db.exec("COMMIT"); } catch (e) { try { this.db.exec("ROLLBACK"); } catch {} throw e; } }
+  async commitClose(runId: string, candidate: CandidateAsset | undefined, events: Omit<EvidenceEvent, "event_id" | "sequence" | "received_at">[], patch: Partial<TaskRun>) { this.db.exec("BEGIN IMMEDIATE"); try { if (candidate) this.put("candidate", candidate.candidate_id, candidate, candidate.source_run_id); for (const event of events) this.insertEvent(event); const run = this.one<TaskRun>("run", runId); if (!run) throw new Error("run not found"); const next = { ...run, ...clone(patch) }; this.db.prepare("UPDATE evidence_docs SET team_id=?,task_id=?,data_json=? WHERE kind='run' AND id=?").run(next.team_id, next.task_id ?? null, JSON.stringify(next), runId); this.db.exec("COMMIT"); } catch (e) { try { this.db.exec("ROLLBACK"); } catch {} throw e; } }
   async saveReceipt(receipt: AssetEvidenceReceipt) { this.put("receipt", `${receipt.run_id}:${receipt.revision}`, receipt, receipt.run_id); return clone(receipt); }
   async getReceipt(runId: string, revision: number) { return this.one<AssetEvidenceReceipt>("receipt", `${runId}:${revision}`); }
   async getRun(id0: string) { return this.one<TaskRun>("run", id0); }
@@ -209,12 +211,28 @@ export class SqliteEvidenceStore implements EvidenceStore {
   async addValidation(v: Validation) { return this.put("validation", v.validation_id, v); } async listValidations(r: string) { return this.many<Validation>("validation", r); }
   async addReview(v: Review) { return this.put("review", v.review_id, v); } async listReviews(r: string) { return this.many<Review>("review", r); }
   async addEvaluation(v: Evaluation) { return this.put("evaluation", v.evaluation_id, v); } async listEvaluations(r: string) { return this.many<Evaluation>("evaluation", r); }
-  async appendEvent(input: Omit<EvidenceEvent, "event_id" | "sequence" | "received_at">) { this.db.exec("BEGIN IMMEDIATE"); try { const duplicate = this.db.prepare("SELECT data_json FROM evidence_docs WHERE kind='event' AND run_id=? AND event_key=?").get(input.run_id, input.idempotency_key) as { data_json: string } | undefined; if (duplicate) { this.db.exec("COMMIT"); return JSON.parse(duplicate.data_json) as EvidenceEvent; } const row = this.db.prepare("SELECT COALESCE(MAX(event_sequence),0)+1 AS sequence FROM evidence_docs WHERE kind='event' AND run_id=?").get(input.run_id) as { sequence: number }; const v: EvidenceEvent = { ...clone(input), event_id: id("evt"), sequence: row.sequence, received_at: isoNow() }; this.db.prepare("INSERT INTO evidence_docs(kind,id,run_id,team_id,task_id,created_at,event_sequence,event_key,data_json) VALUES('event',?,?,?,?,?,?,?,?)").run(v.event_id, v.run_id, null, null, v.received_at, v.sequence, v.idempotency_key, JSON.stringify(v)); this.db.exec("COMMIT"); return clone(v); } catch (e) { try { this.db.exec("ROLLBACK"); } catch {} throw e; } }
+  async appendEvent(input: Omit<EvidenceEvent, "event_id" | "sequence" | "received_at">) {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const duplicate = this.db.prepare("SELECT data_json FROM evidence_docs WHERE kind='event' AND run_id=? AND event_key=?").get(input.run_id, input.idempotency_key) as { data_json: string } | undefined;
+      if (duplicate) { this.db.exec("COMMIT"); return JSON.parse(duplicate.data_json) as EvidenceEvent; }
+      const run = this.one<TaskRun>("run", input.run_id);
+      if (!run) throw new Error("run not found");
+      if (run.status !== "running" && input.type !== "correction_recorded") throw new Error("run is closed");
+      const result = this.insertEvent(input);
+      if (input.type === "correction_recorded") this.bumpRevision(input.run_id);
+      this.db.exec("COMMIT");
+      return clone(result);
+    } catch (e) { this.db.exec("ROLLBACK"); throw e; }
+  }
   async listEvents(r: string) { return (this.db.prepare("SELECT data_json FROM evidence_docs WHERE kind='event' AND run_id=? ORDER BY event_sequence").all(r) as { data_json: string }[]).map(x => JSON.parse(x.data_json) as EvidenceEvent); }
   async addCandidate(v: CandidateAsset) { return this.put("candidate", v.candidate_id, v, v.source_run_id); } async listCandidates(r: string) { return this.many<CandidateAsset>("candidate", r); }
   async updateCandidate(id0: string, patch: Pick<CandidateAsset, "status">) { const v = this.one<CandidateAsset>("candidate", id0); if (!v) throw new Error("candidate not found"); const next = { ...v, ...patch }; this.db.prepare("UPDATE evidence_docs SET data_json=? WHERE kind='candidate' AND id=?").run(JSON.stringify(next), id0); return next; }
   async transitionCandidate(id0: string, status: "approved" | "rejected") { this.db.exec("BEGIN IMMEDIATE"); try { const v = this.one<CandidateAsset>("candidate", id0); if (!v) throw new Error("candidate not found"); if (v.status !== "candidate") throw new Error("candidate already reviewed"); const next = { ...v, status }; const result = this.db.prepare("UPDATE evidence_docs SET data_json=? WHERE kind='candidate' AND id=? AND json_extract(data_json,'$.status')='candidate'").run(JSON.stringify(next), id0); if (result.changes !== 1) throw new Error("candidate already reviewed"); this.db.exec("COMMIT"); return next; } catch (e) { try { this.db.exec("ROLLBACK"); } catch {} throw e; } }
-  async commitReview(review: Review, event: Omit<EvidenceEvent, "event_id" | "sequence" | "received_at">) { this.db.exec("BEGIN IMMEDIATE"); try { this.put("review", review.review_id, review); const e = this.insertEvent(event); this.bumpRevision(review.run_id); this.db.exec("COMMIT"); return clone(review); } catch (e) { try { this.db.exec("ROLLBACK"); } catch {} throw e; } }
+  async commitReview(review: Review, event: Omit<EvidenceEvent, "event_id" | "sequence" | "received_at">) { this.db.exec("BEGIN IMMEDIATE"); try {
+    const prior = this.db.prepare("SELECT data_json FROM evidence_docs WHERE kind='event' AND run_id=? AND event_key=?").get(review.run_id, event.idempotency_key) as { data_json: string } | undefined;
+    if (prior) { const previous = this.one<Review>("review", JSON.parse(prior.data_json).data.review_id)!; this.db.exec("COMMIT"); return previous; }
+    this.put("review", review.review_id, review); const e = this.insertEvent(event); this.bumpRevision(review.run_id); this.db.exec("COMMIT"); return clone(review); } catch (e) { try { this.db.exec("ROLLBACK"); } catch {} throw e; } }
   async commitCandidateReview(runId: string, id0: string, status: "approved" | "rejected", event: Omit<EvidenceEvent, "event_id" | "sequence" | "received_at">) { this.db.exec("BEGIN IMMEDIATE"); try { const v = this.one<CandidateAsset>("candidate", id0); if (!v || v.source_run_id !== runId) throw new Error("candidate not found"); if (v.status !== "candidate") throw new Error("candidate already reviewed"); const next = { ...v, status }; if (this.db.prepare("UPDATE evidence_docs SET data_json=? WHERE kind='candidate' AND id=? AND json_extract(data_json,'$.status')='candidate'").run(JSON.stringify(next), id0).changes !== 1) throw new Error("candidate already reviewed"); this.insertEvent(event); this.bumpRevision(runId); this.db.exec("COMMIT"); return next; } catch (e) { try { this.db.exec("ROLLBACK"); } catch {} throw e; } }
   private insertEvent(input: Omit<EvidenceEvent, "event_id" | "sequence" | "received_at">) { const duplicate = this.db.prepare("SELECT data_json FROM evidence_docs WHERE kind='event' AND run_id=? AND event_key=?").get(input.run_id, input.idempotency_key) as { data_json: string } | undefined; if (duplicate) return JSON.parse(duplicate.data_json) as EvidenceEvent; const row = this.db.prepare("SELECT COALESCE(MAX(event_sequence),0)+1 AS sequence FROM evidence_docs WHERE kind='event' AND run_id=?").get(input.run_id) as { sequence: number }; const v: EvidenceEvent = { ...clone(input), event_id: id("evt"), sequence: row.sequence, received_at: isoNow() }; this.db.prepare("INSERT INTO evidence_docs(kind,id,run_id,team_id,task_id,created_at,event_sequence,event_key,data_json) VALUES('event',?,?,?,?,?,?,?,?)").run(v.event_id, v.run_id, null, null, v.received_at, v.sequence, v.idempotency_key, JSON.stringify(v)); return v; }
   private bumpRevision(runId: string) { const run = this.one<TaskRun>("run", runId); if (!run) throw new Error("run not found"); const next = { ...run, receipt_revision: (run.receipt_revision ?? 0) + 1 }; this.db.prepare("UPDATE evidence_docs SET data_json=? WHERE kind='run' AND id=?").run(JSON.stringify(next), runId); }

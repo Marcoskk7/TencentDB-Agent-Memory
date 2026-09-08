@@ -79,7 +79,6 @@
 - `asset_id`；
 - `asset_type`；
 - `version`；
-- `content_digest`；
 - `source_ref`；
 - 读取时的权限和状态。
 
@@ -200,7 +199,7 @@ Proxy 记录 SSE tool_use、tool_result、workspace diff 和测试
 - 资产名称和类型；
 - 一句话摘要；
 - 适用范围；
-- 版本和 digest；
+- 版本；
 - `access_id`；
 - 完整读取方式。
 
@@ -214,7 +213,6 @@ Proxy 记录 SSE tool_use、tool_result、workspace diff 和测试
   asset_id="skill_retry"
   asset_type="skill"
   version="3"
-  digest="sha256:..."
   applicability="API client retry and backoff">
   该资产适用于 API 重试和退避策略。
 </team_asset_candidate>
@@ -248,7 +246,6 @@ interface TaskRun {
   run_kind?: "main" | "fork" | "subagent" | "retry" | "control" | "oracle";
   model_fingerprint?: string;
   environment_fingerprint?: string;
-  prompt_config_digest?: string;
   status: "running" | "completed" | "failed" | "cancelled" | "abandoned";
   close_reason?: string;
   last_heartbeat_at?: string;
@@ -267,7 +264,6 @@ interface AssetAccess {
   asset_id: string;
   asset_type: "skill" | "llm_wiki" | "code_graph" | "chat_memory";
   version: number;
-  content_digest: string;
   source_ref?: string;
   mode: "search" | "read" | "inject";
   reader_team_id: string;
@@ -345,7 +341,7 @@ interface EvidenceEvent {
 
 - `Decision`：技术决策和理由；
 - `Behavior`：工具名称、目标文件、命令摘要、结果摘要；
-- `CodeDiff`：基线 commit、文件、增删行、diff digest；
+- `CodeDiff`：基线 commit、文件、增删行；
 - `Validation`：命令、退出码、通过状态、验证者；
 - `Review`：审核人、结论、理由和关联证据；
 - `CandidateAsset`：候选内容、来源 TaskRun、验证结果和审核状态。
@@ -374,13 +370,13 @@ POST /v3/evidence/task-runs
 
 ### 7.2 记录资产访问和阶段事件
 
-资产访问必须先创建 `AssetAccess` 快照。Proxy 只有在获得 ACL 允许、并拿到资产版本和 digest 后，才能调用：
+资产访问必须先创建 `AssetAccess` 快照。Proxy 只有在获得 ACL 允许、并拿到资产版本后，才能调用：
 
 ```http
 POST /v3/evidence/task-runs/:run_id/accesses
 ```
 
-该接口由服务端生成 `access_id`，写入资产版本、digest、source、读取者和读取时间，并同时追加 `asset_recalled` 或 `asset_read` 事实。检索只返回元数据时，也必须使用 ACL 校验后的版本和 digest；若无法取得 digest，不得进入 `injected`。后续 `selected`、`injected` 和 claim 只能引用已存在的 `access_id`。
+该接口由服务端生成 `access_id`，写入资产版本、source、读取者和读取时间，并同时追加 `asset_recalled` 或 `asset_read` 事实。检索只返回元数据时，也必须使用 ACL 校验后的版本。后续 `selected`、`injected` 和 claim 只能引用已存在的 `access_id`。
 
 工具行为和代码 diff 也必须有明确写入路径：
 
@@ -389,7 +385,7 @@ POST /v3/evidence/task-runs/:run_id/behaviors
 POST /v3/evidence/task-runs/:run_id/diffs
 ```
 
-这两个接口分别生成 `behavior_id` 和 `diff_id`，供 claim、review 和 validation 引用。它们只保存脱敏后的摘要、digest 和必要的文件/命令元数据，不保存完整对话或未经脱敏的输出。
+这两个接口分别生成 `behavior_id` 和 `diff_id`，供 claim、review 和 validation 引用。它们只保存脱敏后的摘要和必要的文件/命令元数据，不保存完整对话或未经脱敏的输出。
 
 阶段性事件仍可通过以下接口追加，但每种事件必须使用对应的版本化 schema：
 
@@ -416,7 +412,7 @@ POST /v3/evidence/task-runs/:run_id/events
 - 事件类型合法；
 - `run_id` 存在且未关闭；
 - `access_id` 属于当前 TaskRun；
-- 资产版本和 digest 与快照一致；
+- 资产版本与快照一致；
 - 相同幂等键重复提交不产生重复事件。
 
 事件写入、对象创建和幂等键检查必须在同一事务或等价的原子操作中完成。
@@ -604,7 +600,7 @@ Proxy 负责：
 
 - 两个变体使用相同的基线 commit、模型/工具配置和环境指纹；
 - 两个变体使用隔离的工作区，不能共享未提交修改或运行时上下文；
-- control run 未实际注入目标资产，with-assets run 的资产版本和 digest 可追溯；
+- control run 未实际注入目标资产，with-assets run 的资产版本可追溯；
 - 评测结果包含任务结果、验证结果和成本指标；
 - 达到预先定义的最小样本数或具备独立的因果证据，并且没有污染或冲突记录。
 
@@ -732,7 +728,7 @@ interface AssetEvidenceReceipt {
 
 - 资产读取必须经过现有 ACL；
 - 只允许注入 `approved` 或明确允许使用的资产；
-- 记录版本和 content digest，防止版本漂移；
+- 记录资产 ID 和版本，按记录版本读取资产，防止版本漂移；
 - 过期、环境不兼容或冲突资产必须显示风险；
 - 资产内容必须经过现有清洗和边界标记，不能覆盖系统指令；
 - 事件和回执不得保存 API key、secret、完整个人对话或未经脱敏的敏感 Prompt；
@@ -782,7 +778,7 @@ CodeBuddy 不属于本期适配范围。若其他 Proxy 不在当前仓库，至
 
 - 创建 TaskRun 后能记录资产 recalled/selected/injected；
 - Claude Code main/fork 请求能正确创建独立 TaskRun，compact/title-gen/session-init 不创建普通任务证据；
-- 每次注入都有 `access_id`、版本和 digest；
+- 每次注入都有 `access_id` 和版本；
 - Agent 声明能关联具体资产、文件和决策；
 - Anthropic SSE 的 tool_use 与后续 tool_result 能关联到同一行为；
 - diff 和测试结果能关联到 claim；

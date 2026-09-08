@@ -1,3 +1,5 @@
+> ⚠️ **此文档已过时。请以项目中确认有效的最新 spec 为准进行开发。**
+
 # Asset evidence MVP implementation
 
 The MVP is split into four layers:

@@ -1,3 +1,5 @@
+> ⚠️ **此文档已过时。请以项目中确认有效的最新 spec 为准进行开发。**
+
 # Evidence 前置核验与复用记录
 
 核验日期：2026-09-03。唯一工作树：`/Users/marcoskk7/github/TencentDB-Agent-Memory-evidence`。

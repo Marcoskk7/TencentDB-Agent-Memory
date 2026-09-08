@@ -1,3 +1,5 @@
+> ⚠️ **此文档已过时。请以项目中确认有效的最新 spec 为准进行开发。**
+
 # MemoryPanel evidence and review
 
 `Evidence & review` is a scoped extension of the established MemoryPanel Tea console. It makes recorded TaskRun evidence inspectable and reviewable; it does not introduce a new visual identity, create work, or change an asset's lifecycle.

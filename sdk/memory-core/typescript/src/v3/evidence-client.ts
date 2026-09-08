@@ -11,11 +11,9 @@ export class EvidenceClient {
   constructor(c: EvidenceClientConfig | Transport) { if ("post" in c) this.http = c; else { if (!c.apiKey || !c.serviceId) throw new ParamError("apiKey and serviceId must be provided"); this.http = new V3HttpTransport(c); } }
   createTaskRun(p: CreateTaskRunRequest): Promise<TaskRun> { return this.http.post("/v3/evidence/task-runs", clean(p)); }
   recordAccess(runId: string, p: Omit<AssetAccess, "access_id" | "run_id">): Promise<AssetAccess> { return this.http.post(`/v3/evidence/task-runs/${encodeURIComponent(runId)}/accesses`, clean(p)); }
-  recordAssetAccess(runId: string, p: Omit<AssetAccess, "access_id" | "run_id">): Promise<AssetAccess> { return this.recordAccess(runId, p); }
   recordBehavior(runId: string, p: Record<string, unknown>): Promise<unknown> { return this.http.post(`/v3/evidence/task-runs/${encodeURIComponent(runId)}/behaviors`, clean(p)); }
   recordDiff(runId: string, p: Record<string, unknown>): Promise<unknown> { return this.http.post(`/v3/evidence/task-runs/${encodeURIComponent(runId)}/diffs`, clean(p)); }
   appendEvent(runId: string, type: string, data: Record<string, unknown>, idempotencyKey: string): Promise<unknown> { return this.http.post(`/v3/evidence/task-runs/${encodeURIComponent(runId)}/events`, { type, data, idempotency_key: idempotencyKey }); }
-  appendEvidenceEvent(runId: string, type: string, data: Record<string, unknown>, idempotencyKey: string): Promise<unknown> { return this.appendEvent(runId, type, data, idempotencyKey); }
   recordClaim(runId: string, p: Omit<AgentUsageClaim, "claim_id" | "run_id">): Promise<AgentUsageClaim> { return this.http.post(`/v3/evidence/task-runs/${encodeURIComponent(runId)}/claims`, clean(p)); }
   recordReview(runId: string, p: Record<string, unknown>): Promise<unknown> { return this.http.post(`/v3/evidence/task-runs/${encodeURIComponent(runId)}/reviews`, clean(p)); }
   recordValidation(runId: string, p: Record<string, unknown>): Promise<unknown> { return this.http.post(`/v3/evidence/task-runs/${encodeURIComponent(runId)}/validations`, clean(p)); }
@@ -27,6 +25,5 @@ export class EvidenceClient {
   }
   getTaskRun(runId: string): Promise<EvidenceSnapshot> { return this.get(`/v3/evidence/task-runs/${encodeURIComponent(runId)}`); }
   getReceipt(runId: string): Promise<AssetEvidenceReceipt> { return this.get(`/v3/evidence/task-runs/${encodeURIComponent(runId)}/receipt`); }
-  getEvidenceReceipt(runId: string): Promise<AssetEvidenceReceipt> { return this.getReceipt(runId); }
   closeTaskRun(runId: string, close_reason?: string): Promise<AssetEvidenceReceipt> { return this.http.post(`/v3/evidence/task-runs/${encodeURIComponent(runId)}/close`, clean({ close_reason })); }
 }
