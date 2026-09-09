@@ -83,7 +83,8 @@ describe("evidence chain", () => {
       await svc.appendEvent(run.run_id, "asset_selected", { access_id: access.access_id }, "event-1");
       await svc.appendEvent(run.run_id, "asset_injected", { access_id: access.access_id }, "event-2");
       await svc.recordReview(run.run_id, { access_id: access.access_id, decision: "uncertain", reason: "durable", reviewer_user_id: "r" });
-      const claim = await svc.recordClaim(run.run_id, { access_id: access.access_id, declared_usage: "used", purpose: "durable" });
+      const behavior = await svc.recordBehavior(run.run_id, { tool_name: "edit", target_files: ["src/api.ts"] });
+      const claim = await svc.recordClaim(run.run_id, { access_id: access.access_id, declared_usage: "used", purpose: "durable", behavior_refs: [behavior.behavior_id] });
       await svc.closeTaskRun(run.run_id); store.close();
       const reopened = new EvidenceService(new SqliteEvidenceStore(db)); const snapshot = await reopened.getSnapshot(run.run_id);
       expect(snapshot.events.map(x => x.sequence)).toEqual([...snapshot.events.keys()].map(x => x + 1));
