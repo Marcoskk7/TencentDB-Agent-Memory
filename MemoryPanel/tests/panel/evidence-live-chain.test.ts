@@ -76,6 +76,8 @@ it('real workspace command → Core HTTP → Panel BFF multi-user review → rec
     const run = { run_id: context!.runId };
     const access = (await post('task-runs/get', { run_id: run.run_id })).accesses[0];
     expect(access.asset_id).toBe(skillId);
+    expect(access.selection_reason).toBe('approved fixed asset binding');
+    expect(access.token_estimate).toBeGreaterThan(0);
     await recordEvidenceResponse(proxyConfig, context, serviceId, 'test-key-owner', [{ tool_use_id: 'tool-1', tool_name: 'Read', input_json: '{"file_path":"source.txt"}' }], []);
     clearEvidenceRunCache();
     const restored = await ensureEvidenceRun({ config: proxyConfig, identity, requestKind: 'main', taskGoal: 'Continue the task after restart', agentSource: 'claude-code', serviceId, requestId: 'request-after-restart', userKey: 'test-key-owner' });
@@ -109,6 +111,7 @@ it('real workspace command → Core HTTP → Panel BFF multi-user review → rec
       return { status: response.status, envelope: await response.json() as any };
     };
     const snapshot = await post('task-runs/get', { run_id: run.run_id });
+    expect(snapshot.diffs[0].diff_digest).toMatch(/^sha256:[a-f0-9]{64}$/);
     const review = { run_id: run.run_id, access_id: access.access_id, decision: 'support', reason: 'Actual workspace diff and executed test support the claim', diff_refs: [snapshot.diffs[0].diff_id], reviewer_user_id: 'forged' };
     expect((await panel('review', review, 'member')).status).toBe(403);
     expect((await panel('get', { run_id: run.run_id }, 'outsider')).status).toBe(403);
@@ -122,6 +125,8 @@ it('real workspace command → Core HTTP → Panel BFF multi-user review → rec
     expect(closed.run.status).toBe('completed');
     expect(closed.candidates.length).toBe(1);
     expect(closed.candidates[0].status).toBe('candidate');
+    const effectiveness = await post('assets/effectiveness', { asset_id: skillId, version: 1 });
+    expect(effectiveness).toMatchObject([{ asset_id: skillId, asset_version: 1, used: 1, validated: 1 }]);
     const next = await ensureEvidenceRun({ config: proxyConfig, identity, requestKind: 'main', taskGoal: 'A new task after explicit close', agentSource: 'claude-code', serviceId, requestId: 'request-after-close', userKey: 'test-key-owner' });
     expect(next!.runId).not.toBe(run.run_id);
   } finally {
