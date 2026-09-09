@@ -20,7 +20,8 @@ async function fixture(close = true) {
   const service = new EvidenceService(store);
   const run = await service.createTaskRun({ team_id: 't', agent_id: 'a', user_id: 'u', agent_source: 'test', session_id: 's', request_id: 'r', execution_id: 'e', task_goal: 'atomic audit' });
   const access = await service.recordAccess(run.run_id, { asset_id: 'asset', asset_type: 'skill', version: 1, mode: 'read', reader_team_id: 't', reader_agent_id: 'a', reader_user_id: 'u' });
-  await service.recordClaim(run.run_id, { access_id: access.access_id, declared_usage: 'used', purpose: 'test candidate generation' });
+  const behavior = await service.recordBehavior(run.run_id, { tool_name: 'edit', target_files: ['src/atomic.ts'] });
+  await service.recordClaim(run.run_id, { access_id: access.access_id, declared_usage: 'used', purpose: 'test candidate generation', behavior_refs: [behavior.behavior_id] });
   if (close) await service.closeTaskRun(run.run_id);
   return { store, sql, file, service, run, access };
 }
@@ -56,10 +57,10 @@ describe('durable evidence audit transactions', () => {
     const { sql, service, run } = await fixture(false);
     sql.exec("CREATE TRIGGER reject_behavior_audit BEFORE INSERT ON evidence_docs WHEN NEW.kind='event' AND json_extract(NEW.data_json,'$.type')='behavior_observed' BEGIN SELECT RAISE(ABORT, 'test behavior audit failure'); END");
     await expect(service.recordBehavior(run.run_id, { tool_name: 'shell', idempotency_key: 'behavior-1' })).rejects.toThrow('test behavior audit failure');
-    expect((await service.getSnapshot(run.run_id)).behaviors).toHaveLength(0);
+    expect((await service.getSnapshot(run.run_id)).behaviors).toHaveLength(1);
     sql.exec('DROP TRIGGER reject_behavior_audit');
     await service.recordBehavior(run.run_id, { tool_name: 'shell', idempotency_key: 'behavior-1' });
-    expect((await service.getSnapshot(run.run_id)).behaviors).toHaveLength(1);
+    expect((await service.getSnapshot(run.run_id)).behaviors).toHaveLength(2);
   });
 
   it('allows an idempotent close retry after the run is closed', async () => {

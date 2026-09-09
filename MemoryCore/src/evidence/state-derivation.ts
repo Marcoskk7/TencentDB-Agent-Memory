@@ -2,10 +2,21 @@ import type { AssetAccess, AgentUsageClaim, Behavior, CodeDiff, Evaluation, Evid
 
 export function deriveEvidenceState(access: AssetAccess, events: EvidenceEvent[], claims: AgentUsageClaim[], reviews: Review[], validations: Validation[], behaviors: Behavior[] = [], diffs: CodeDiff[] = [], evaluations: Evaluation[] = []): EvidenceState {
   const forAccess = (e: EvidenceEvent) => e.data.access_id === access.access_id;
-  const recalled = events.some(e => (e.type === "asset_recalled" || e.type === "asset_read" || e.type === "asset_injected") && forAccess(e));
-  const selected = events.some(e => e.type === "asset_selected" && forAccess(e));
-  const injected = events.some(e => e.type === "asset_injected" && forAccess(e));
-  const ownClaims = claims.filter(c => c.access_id === access.access_id);
+  // Corrections are append-only. They supersede the referenced fact in the
+  // effective derivation while leaving both the original event and correction
+  // visible to auditors.
+  const correctedEventIds = new Set(events
+    .filter(e => e.type === "correction_recorded" && forAccess(e) && typeof e.data.original_event_id === "string")
+    .map(e => e.data.original_event_id as string));
+  const effectiveEvents = events.filter(e => !correctedEventIds.has(e.event_id));
+  const recalled = effectiveEvents.some(e => (e.type === "asset_recalled" || e.type === "asset_read" || e.type === "asset_injected") && forAccess(e));
+  const selected = effectiveEvents.some(e => e.type === "asset_selected" && forAccess(e));
+  const injected = effectiveEvents.some(e => e.type === "asset_injected" && forAccess(e));
+  const correctedClaimIds = new Set(effectiveEvents
+    .filter(e => e.type === "correction_recorded" && forAccess(e) && typeof e.data.original_event_id === "string")
+    .map(e => events.find(original => original.event_id === e.data.original_event_id)?.data.claim_id)
+    .filter((id): id is string => typeof id === "string"));
+  const ownClaims = claims.filter(c => c.access_id === access.access_id && !correctedClaimIds.has(c.claim_id));
   const declared_used = ownClaims.some(c => c.declared_usage === "used");
   const not_used = ownClaims.some(c => c.declared_usage === "not_used");
   const ownReviews = reviews.filter(r => r.access_id === access.access_id);
@@ -21,6 +32,8 @@ export function deriveEvidenceState(access: AssetAccess, events: EvidenceEvent[]
     ...ownClaims.flatMap(c => c.diff_refs ?? []),
     ...validatingLinks.flatMap(v => v.diff_refs ?? []),
   ].filter(x => diffIds.has(x)));
+  const linkedDecisionRefs = new Set(ownClaims.flatMap(c => c.decision_refs ?? []));
+  const structuredDecisionRefs = new Set(events.flatMap(e => [e.data.decision_ref, e.data.decision_id]).filter((ref): ref is string => typeof ref === "string"));
 
   // A review can only support this asset through evidence that the asset's
   // own claim already linked. Same-run evidence and free-form decision labels
@@ -36,14 +49,14 @@ export function deriveEvidenceState(access: AssetAccess, events: EvidenceEvent[]
   const rejected = effectiveReviews.some(r => r.decision === "not_support");
   const corrected = events.some(e => e.type === "correction_recorded" && forAccess(e));
   const support = effectiveReviews.some(r => r.decision === "support" && (
-    r.behavior_refs?.some(x => linkedBehaviorIds.has(x)) || r.diff_refs?.some(x => linkedDiffIds.has(x))
+    r.behavior_refs?.some(x => linkedBehaviorIds.has(x)) || r.diff_refs?.some(x => linkedDiffIds.has(x)) || r.decision_refs?.some(x => linkedDecisionRefs.has(x) && structuredDecisionRefs.has(x))
   ));
   // A run can touch many assets.  A validation tied to an unrelated behavior
   // or diff must not mark every access as validated.
-  const validation_passed = validations.some(v => v.run_id === access.run_id && v.passed === true && v.exit_code === 0 && (
+  const validation_passed = validations.some(v => v.run_id === access.run_id && v.passed === true && (v.exit_code === undefined || v.exit_code === 0) && (
     v.claim_refs?.some(x => relatedClaims.has(x)) || v.behavior_refs?.some(x => linkedBehaviorIds.has(x)) || v.diff_refs?.some(x => linkedDiffIds.has(x))
   ));
-  const causal = evaluations.some(e => e.independent_causal_evidence === true && e.contamination !== true && (e.gain ?? 0) > 0);
+  const causal = evaluations.some(e => e.access_id === access.access_id && e.independent_causal_evidence === true && e.comparison_verified === true && e.contamination !== true && (e.gain ?? 0) > 0);
   const used = support && !not_used && !rejected;
   return { recalled, selected, injected, declared_used, used, validation_passed, contributed: used && validation_passed && causal, not_used, rejected, corrected };
 }
