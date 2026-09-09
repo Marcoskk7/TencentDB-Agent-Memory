@@ -5,6 +5,9 @@ import type { MetaEnvelope } from './types';
 
 export type AssetType = 'skill' | 'llm_wiki' | 'code_graph' | 'chat_memory';
 export type RunVariant = 'with_assets' | 'without_assets' | 'oracle';
+export type EvaluationCodeVersion = 'before_evidence' | 'after_evidence';
+export type EvaluationAssetMode = 'without_assets' | 'with_assets';
+export type EvaluationAssetSelectionMode = 'automatic' | 'oracle' | 'none';
 export type RunKind = 'main' | 'fork' | 'subagent' | 'retry' | 'control' | 'oracle';
 export type RunStatus = 'running' | 'completed' | 'failed' | 'cancelled' | 'abandoned';
 export type AccessMode = 'search' | 'read' | 'inject';
@@ -30,6 +33,9 @@ export interface TaskRun {
   status: RunStatus;
   variant?: RunVariant;
   evaluation_group_id?: string;
+  code_version?: EvaluationCodeVersion;
+  asset_mode?: EvaluationAssetMode;
+  asset_selection_mode?: EvaluationAssetSelectionMode;
   parent_run_id?: string;
   run_kind?: RunKind;
   model_fingerprint?: string;
@@ -60,6 +66,7 @@ export interface AssetAccess {
   compatibility_risk?: string;
   applicability?: string;
   name?: string;
+  source_candidate_id?: string;
   created_at: string;
 }
 
@@ -81,7 +88,7 @@ export interface AgentUsageClaim {
 export type EvidenceEventType = 'task_run_started' | 'asset_recalled' | 'asset_selected' | 'asset_injected' | 'asset_read' | 'intent_declared' | 'agent_declared' | 'behavior_observed' | 'diff_recorded' | 'validation_recorded' | 'review_recorded' | 'correction_recorded' | 'evaluation_recorded' | 'candidate_generated' | 'candidate_reviewed' | 'task_run_closed';
 export interface EvidenceEvent { event_id: string; run_id: string; sequence: number; type: EvidenceEventType; data: Record<string, unknown>; schema_version: number; actor?: { type: 'proxy' | 'agent' | 'user' | 'system'; id?: string }; occurred_at: string; received_at: string; idempotency_key: string; }
 export interface Behavior { behavior_id: string; run_id: string; tool_name: string; target_files?: string[]; command_summary?: string; result_summary?: string; created_at: string; }
-export interface CodeDiff { diff_id: string; run_id: string; base_commit?: string; head_commit?: string; files: string[]; additions?: number; deletions?: number; created_at: string; }
+export interface CodeDiff { diff_id: string; run_id: string; base_commit?: string; head_commit?: string; files: string[]; diff_digest?: string; additions?: number; deletions?: number; created_at: string; }
 export interface Validation { validation_id: string; run_id: string; command: string; exit_code?: number; passed: boolean; validation_type: string; claim_refs?: string[]; behavior_refs?: string[]; diff_refs?: string[]; verifier?: string; created_at: string; }
 
 export interface EvidenceReview {
@@ -103,6 +110,15 @@ export interface CandidateAsset {
   source_diff_ids: string[];
   source_validation_ids: string[];
   proposed_kind: string;
+  applicability?: string;
+  risks?: string[];
+  recommendation?: 'publish' | 'revise' | 'deprecate' | 'conflict';
+  supersedes_asset_id?: string;
+  conflict_asset_ids?: string[];
+  deprecates_asset_ids?: string[];
+  version?: number;
+  reviewer_decision?: string;
+  published_asset_id?: string;
   content: string;
   confidence: number;
   review_required: true;
@@ -121,7 +137,11 @@ export interface AssetEvidenceReceipt {
     name?: string;
     version: number;
     source_ref?: string;
+    source_candidate_id?: string;
     applicability?: string;
+    selection_score?: number;
+    selection_reason?: string;
+    token_estimate?: number;
     evidence: { recalled: boolean; selected: boolean; injected: boolean; declared_used: boolean; used: boolean; validation_passed: boolean; contributed: boolean; not_used: boolean; rejected: boolean; corrected: boolean };
     decision_refs: string[];
     file_refs: string[];

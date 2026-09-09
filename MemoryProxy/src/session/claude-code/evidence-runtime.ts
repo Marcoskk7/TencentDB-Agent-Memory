@@ -197,14 +197,19 @@ export async function injectApprovedSkillSnapshots(config: ProxyConfig, context:
       asset_id: item.asset_id, asset_type: "skill", version: skill.version,
       source_ref: typeof skill.source_ref === "string" ? skill.source_ref : undefined, mode: "read",
       reader_team_id: identity.teamId, reader_agent_id: identity.agentId, reader_user_id: identity.userId,
+      name: typeof item.name === "string" ? item.name : undefined,
+      applicability: typeof item.description === "string" ? item.description : undefined,
+      selection_reason: "approved fixed asset binding",
+      token_estimate: Math.ceil(skill.content.length / 4),
       idempotency_key: stableKey(context.runId, item.asset_id, String(skill.version), "access"),
     }, userKey);
     context.accessIds.add(access.access_id);
     const snapshot = { access_id: access.access_id, asset_id: item.asset_id, asset_type: "skill", version: skill.version,
       summary: (item.description || skill.content.slice(0, 800)).slice(0, 1200), read_path: item.name ? `使用现有skill_tools中的skill_view，body=${JSON.stringify({ skill_name: item.name, version: skill.version, include_content: true })}；沿用该工具已有的URL、鉴权及会话参数。` : undefined };
     const eventData = { access_id: access.access_id, asset_id: item.asset_id, version: skill.version };
+    const selectionData = { ...eventData, reason: "approved fixed asset binding", token_estimate: Math.ceil(skill.content.length / 4) };
     await appendEvent(cfg, context.runId, "asset_recalled", eventData, stableKey(context.runId, access.access_id, "recalled"), userKey);
-    await appendEvent(cfg, context.runId, "asset_selected", eventData, stableKey(context.runId, access.access_id, "selected"), userKey);
+    await appendEvent(cfg, context.runId, "asset_selected", selectionData, stableKey(context.runId, access.access_id, "selected"), userKey);
     blocks.push(buildAssetSummaryBlock(snapshot));
     await appendEvent(cfg, context.runId, "asset_injected", eventData, stableKey(context.runId, access.access_id, "injected"), userKey);
     } catch (error) {

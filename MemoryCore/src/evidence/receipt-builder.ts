@@ -11,7 +11,7 @@ export function buildReceipt(run: TaskRun, accesses: AssetAccess[], claims: Agen
     const claimIds = new Set(ownClaims.map(c => c.claim_id));
     const behaviorIds = new Set(ownClaims.flatMap(c => c.behavior_refs ?? []));
     const diffIds = new Set(ownClaims.flatMap(c => c.diff_refs ?? []));
-    const validation_refs = [...new Set(validations.filter(v => v.run_id === access.run_id && v.passed === true && v.exit_code === 0 && ((v.claim_refs ?? []).some(id => claimIds.has(id)) || (v.behavior_refs ?? []).some(id => behaviorIds.has(id)) || (v.diff_refs ?? []).some(id => diffIds.has(id)))).map(v => v.validation_id))];
+    const validation_refs = [...new Set(validations.filter(v => v.run_id === access.run_id && v.passed === true && (v.exit_code === undefined || v.exit_code === 0) && ((v.claim_refs ?? []).some(id => claimIds.has(id)) || (v.behavior_refs ?? []).some(id => behaviorIds.has(id)) || (v.diff_refs ?? []).some(id => diffIds.has(id)))).map(v => v.validation_id))];
     const risks = access.compatibility_risk ? [access.compatibility_risk] : [];
     const evidence_gaps: string[] = [];
     if (!evidence.selected) evidence_gaps.push("未记录通过筛选的选择事实");
@@ -19,13 +19,13 @@ export function buildReceipt(run: TaskRun, accesses: AssetAccess[], claims: Agen
     if (evidence.declared_used && !evidence.used) evidence_gaps.push("缺少具有关联证据的人工 support 审核");
     if (evidence.used && !evidence.validation_passed) evidence_gaps.push("缺少与该资产关联的通过验证");
     if (evidence.validation_passed && !evidence.contributed) evidence_gaps.push("没有满足条件的独立因果/对照证据");
-    return { access_id: access.access_id, asset_id: access.asset_id, asset_type: access.asset_type, name: access.name, version: access.version, source_ref: access.source_ref, applicability: access.applicability, evidence, decision_refs, file_refs, validation_refs, risks, evidence_gaps };
+    return { access_id: access.access_id, asset_id: access.asset_id, asset_type: access.asset_type, name: access.name, version: access.version, source_ref: access.source_ref, source_candidate_id: access.source_candidate_id, applicability: access.applicability, selection_score: access.selection_score, selection_reason: access.selection_reason, token_estimate: access.token_estimate, evidence, decision_refs, file_refs, validation_refs, risks, evidence_gaps };
   });
   const summary = { recalled: assets.filter(a => a.evidence.recalled).length, selected: assets.filter(a => a.evidence.selected).length, injected: assets.filter(a => a.evidence.injected).length, used: assets.filter(a => a.evidence.used).length, validation_passed: assets.filter(a => a.evidence.validation_passed).length, contributed: assets.filter(a => a.evidence.contributed).length };
   const causalCount = assets.filter(a => a.evidence.contributed).length;
   // A positive number without a recorded control and comparable baseline is
   // not even suggestive evidence of contribution.
-  const suggestive = evaluations.some(e => e.run_id === run.run_id && e.contamination !== true && e.control_run_id && e.baseline_commit && e.environment_fingerprint && (e.gain ?? 0) > 0);
+  const suggestive = evaluations.some(e => e.run_id === run.run_id && e.comparison_verified === true && e.contamination !== true && e.control_run_id && e.baseline_commit && e.environment_fingerprint && (e.gain ?? 0) > 0);
   const runBehaviors = behaviors.filter(b => b.run_id === run.run_id);
   const failedCommands = validations.filter(v => v.run_id === run.run_id && typeof v.exit_code === "number" && v.exit_code !== 0);
   return { run_id: run.run_id, revision, summary, assets, metrics: { tool_calls: runBehaviors.length, error_attempts: failedCommands.length }, contribution_evidence: causalCount ? "causal" : suggestive ? "suggestive" : "insufficient", generated_at: new Date().toISOString() };

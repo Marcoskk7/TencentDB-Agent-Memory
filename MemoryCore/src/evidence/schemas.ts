@@ -10,7 +10,7 @@ export const runSchema = z.object({
   team_id: ref, agent_id: ref, user_id: ref, task_id: ref.optional(),
   agent_source: ref, session_id: ref, request_id: ref, execution_id: ref,
   task_goal: text, repo: text.optional(), branch: text.optional(), base_commit: ref.optional(), head_commit: ref.optional(),
-  variant: z.enum(["with_assets", "without_assets", "oracle"]).optional(), evaluation_group_id: ref.optional(), parent_run_id: ref.optional(),
+  variant: z.enum(["with_assets", "without_assets", "oracle"]).optional(), evaluation_group_id: ref.optional(), code_version: z.enum(["before_evidence", "after_evidence"]).optional(), asset_mode: z.enum(["without_assets", "with_assets"]).optional(), asset_selection_mode: z.enum(["automatic", "oracle", "none"]).optional(), parent_run_id: ref.optional(),
   run_kind: z.enum(["main", "fork", "subagent", "retry", "control", "oracle"]).optional(),
   model_fingerprint: ref.optional(), environment_fingerprint: ref.optional(),
   workspace_id: text.optional(), last_heartbeat_at: z.iso.datetime().optional(), ...common,
@@ -20,7 +20,7 @@ export const accessSchema = z.object({
   source_ref: text.optional(), mode: z.enum(["search", "read", "inject"]),
   reader_team_id: ref, reader_agent_id: ref, reader_user_id: ref, adapter: ref.optional(), read_at: z.iso.datetime().optional(),
   selection_score: z.number().finite().optional(), selection_reason: text.optional(), token_estimate: z.number().int().nonnegative().optional(),
-  compatibility_risk: text.optional(), applicability: text.optional(), name: text.optional(), ...common,
+  compatibility_risk: text.optional(), applicability: text.optional(), name: text.optional(), source_candidate_id: ref.optional(), ...common,
 }).strict();
 export const behaviorSchema = z.object({
   tool_name: ref, target_files: refs, command_summary: text.optional(), result_summary: text.optional(),
@@ -28,6 +28,7 @@ export const behaviorSchema = z.object({
 }).strict();
 export const diffSchema = z.object({
   base_commit: ref.optional(), head_commit: ref.optional(), files: z.array(ref).max(512),
+  diff_digest: z.string().regex(/^sha256:[a-f0-9]{64}$/).optional(),
   additions: z.number().int().nonnegative().optional(), deletions: z.number().int().nonnegative().optional(), ...common,
 }).strict();
 export const claimSchema = z.object({
@@ -45,6 +46,10 @@ export const reviewSchema = z.object({
 export const evaluationSchema = z.object({
   control_run_id: ref.optional(), access_id: ref.optional(), baseline_commit: ref.optional(), environment_fingerprint: ref.optional(),
   passed: z.boolean().optional(), gain: z.number().finite().optional(), contamination: z.boolean().optional(),
+  task_success: z.boolean().optional(), tests_passed: z.number().int().nonnegative().optional(),
+  repair_time_ms: z.number().finite().nonnegative().optional(), total_tokens: z.number().finite().nonnegative().optional(),
+  tool_calls: z.number().int().nonnegative().optional(), failed_attempts: z.number().int().nonnegative().optional(),
+  receipt_complete: z.boolean().optional(), asset_usage_count: z.number().int().nonnegative().optional(),
   metrics: z.record(ref, z.number().finite()).refine(v => Object.keys(v).length <= 32).optional(), ...common,
 }).strict();
 const assetEvent = { access_id: ref, asset_id: ref.optional(), version: z.number().int().nonnegative().optional(), occurred_at: z.iso.datetime().optional() };
@@ -52,7 +57,7 @@ export const eventSchemas = {
   asset_recalled: z.object(assetEvent).strict(), asset_read: z.object(assetEvent).strict(),
   asset_selected: z.object({ ...assetEvent, reason: text.optional(), token_estimate: z.number().int().nonnegative().optional() }).strict(),
   asset_injected: z.object({ ...assetEvent, mode: z.enum(["summary", "full", "tool"]).optional() }).strict(),
-  intent_declared: z.object({ ...assetEvent, purpose: text.optional(), ...links, files: refs }).strict(),
+  intent_declared: z.object({ ...assetEvent, purpose: text.optional(), decision_ref: ref.optional(), ...links, files: refs }).strict(),
   diff_unavailable: z.object({ reason: text }).strict(),
   task_close_prompted: z.object({ reason: text.optional() }).strict(),
   task_close_decision: z.object({ decision: z.enum(["complete", "continue", "cancel"]) }).strict(),
