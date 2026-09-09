@@ -4,3 +4,6 @@ export * from "./evidence-service.js";
 export * from "./state-derivation.js";
 export * from "./receipt-builder.js";
 export * from "./candidate-generator.js";
+export * from "./asset-effectiveness.js";
+export * from "./swebench.js";
+export * from "./evaluation-pipeline.js";

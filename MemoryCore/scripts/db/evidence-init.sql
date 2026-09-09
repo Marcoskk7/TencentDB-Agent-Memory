@@ -19,6 +19,9 @@ CREATE TABLE IF NOT EXISTS evidence_task_runs (
   head_commit TEXT,
   variant TEXT,
   evaluation_group_id TEXT,
+  code_version TEXT,
+  asset_mode TEXT,
+  asset_selection_mode TEXT,
   parent_run_id TEXT,
   run_kind TEXT,
   model_fingerprint TEXT,
@@ -52,6 +55,7 @@ CREATE TABLE IF NOT EXISTS evidence_asset_accesses (
   compatibility_risk TEXT,
   applicability TEXT,
   name TEXT,
+  source_candidate_id TEXT,
   created_at TEXT NOT NULL
 );
 
@@ -153,6 +157,14 @@ CREATE TABLE IF NOT EXISTS evidence_evaluations (
   gain REAL,
   contamination INTEGER,
   independent_causal_evidence INTEGER,
+  task_success INTEGER,
+  tests_passed INTEGER,
+  repair_time_ms REAL,
+  total_tokens REAL,
+  tool_calls INTEGER,
+  failed_attempts INTEGER,
+  receipt_complete INTEGER,
+  asset_usage_count INTEGER,
   metrics_json TEXT,
   created_at TEXT NOT NULL
 );
@@ -163,9 +175,32 @@ CREATE TABLE IF NOT EXISTS evidence_candidate_assets (
   source_diff_ids_json TEXT NOT NULL,
   source_validation_ids_json TEXT NOT NULL,
   proposed_kind TEXT NOT NULL,
+  applicability TEXT,
+  risks_json TEXT,
+  version INTEGER,
+  reviewer_decision TEXT,
+  published_asset_id TEXT,
   content TEXT NOT NULL,
   confidence REAL NOT NULL,
   review_required INTEGER NOT NULL DEFAULT 1,
   status TEXT NOT NULL DEFAULT 'candidate',
   created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS evidence_asset_effectiveness (
+  asset_id TEXT NOT NULL,
+  asset_version INTEGER NOT NULL,
+  recalled INTEGER NOT NULL DEFAULT 0,
+  selected INTEGER NOT NULL DEFAULT 0,
+  injected INTEGER NOT NULL DEFAULT 0,
+  used INTEGER NOT NULL DEFAULT 0,
+  validated INTEGER NOT NULL DEFAULT 0,
+  contributed INTEGER NOT NULL DEFAULT 0,
+  corrected INTEGER NOT NULL DEFAULT 0,
+  task_successes INTEGER NOT NULL DEFAULT 0,
+  task_failures INTEGER NOT NULL DEFAULT 0,
+  confidence REAL NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'insufficient',
+  last_evaluated_at TEXT,
+  PRIMARY KEY (asset_id, asset_version)
 );
